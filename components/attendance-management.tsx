@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar, Check, X, Users } from "lucide-react"
-import { getStudents, getAttendance, markAttendance } from "@/lib/database"
+import { getUsers, getAttendance, markAttendance } from "@/lib/database"
 
-interface Student {
+interface User {
   id: string
   first_name: string
   last_name: string
@@ -24,7 +24,7 @@ interface AttendanceRecord {
 }
 
 export default function AttendanceManagement() {
-  const [students, setStudents] = useState<Student[]>([])
+  const [students, setUsers] = useState<User[]>([])
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,7 +40,7 @@ export default function AttendanceManagement() {
       setLoading(true)
       setError(null)
       const [studentsData, attendanceData] = await Promise.all([
-        getStudents().catch((err) => {
+        getUsers().catch((err) => {
           console.error("Error loading students:", err)
           return []
         }),
@@ -50,8 +50,8 @@ export default function AttendanceManagement() {
         }),
       ])
 
-      const activeStudents = studentsData?.filter((s) => s.status === "active") || []
-      setStudents(activeStudents)
+      const activeUsers = studentsData?.filter((s) => s.status === "active") || []
+      setUsers(activeUsers)
 
       // Crear mapa de asistencia existente
       const attendanceMap = new Map()
@@ -60,7 +60,7 @@ export default function AttendanceManagement() {
       })
 
       // Inicializar estado de asistencia
-      const initialAttendance = activeStudents.map((student) => ({
+      const initialAttendance = activeUsers.map((student) => ({
         student_id: student.id,
         present: attendanceMap.get(student.id) || false,
         notes: "",
@@ -70,7 +70,7 @@ export default function AttendanceManagement() {
     } catch (error) {
       console.error("Error loading data:", error)
       // Establecer datos vacíos en caso de error
-      setStudents([])
+      setUsers([])
       setAttendance([])
       setError("Error al cargar los datos. Intenta nuevamente.")
     } finally {
@@ -111,8 +111,8 @@ export default function AttendanceManagement() {
   }
 
   const presentCount = attendance.filter((record) => record.present).length
-  const totalStudents = students.length
-  const attendanceRate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0
+  const totalUsers = students.length
+  const attendanceRate = totalUsers > 0 ? Math.round((presentCount / totalUsers) * 100) : 0
 
   return (
     <div className="space-y-6">
@@ -148,7 +148,7 @@ export default function AttendanceManagement() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStudents}</div>
+            <div className="text-2xl font-bold">{totalUsers}</div>
             <p className="text-xs text-muted-foreground">Estudiantes activos</p>
           </CardContent>
         </Card>
@@ -170,7 +170,7 @@ export default function AttendanceManagement() {
             <X className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{totalStudents - presentCount}</div>
+            <div className="text-2xl font-bold text-red-600">{totalUsers - presentCount}</div>
             <p className="text-xs text-muted-foreground">No asistieron</p>
           </CardContent>
         </Card>

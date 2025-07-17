@@ -14,7 +14,7 @@ ALTER TABLE fees ADD CONSTRAINT fees_status_check
 CREATE TABLE IF NOT EXISTS payment_notifications (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   fee_id UUID REFERENCES fees(id) ON DELETE CASCADE,
-  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES users(id) ON DELETE CASCADE,
   type VARCHAR(50) NOT NULL CHECK (type IN ('payment_uploaded', 'payment_approved', 'payment_rejected')),
   message TEXT NOT NULL,
   read BOOLEAN DEFAULT FALSE,

@@ -89,7 +89,7 @@ export async function mockSignUp(email: string, password: string, role = "studen
 
   // Si es un estudiante, crear también el perfil de estudiante con los datos completos
   if (role === "student" && studentData) {
-    const { mockStudents, updateMockStudents } = await import("./mock-data")
+    const { mockUsers, updateMockUsers } = await import("./mock-data")
 
     // Generar QR code único
     const qrCode = `STU-${Date.now().toString().slice(-6)}-${studentData.first_name.charAt(0)}${studentData.last_name.charAt(0)}`
@@ -115,7 +115,7 @@ export async function mockSignUp(email: string, password: string, role = "studen
       users: { email: newUser.email, role: newUser.role },
       fees: [],
     }
-    updateMockStudents([...mockStudents, newStudent])
+    updateMockUsers([...mockUsers, newStudent])
   }
 
   return { user: newUser }

@@ -3,7 +3,6 @@
 DROP TABLE IF EXISTS attendance CASCADE;
 DROP TABLE IF EXISTS fees CASCADE;
 DROP TABLE IF EXISTS news CASCADE;
-DROP TABLE IF EXISTS students CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
 -- Crear tabla de usuarios
@@ -17,7 +16,7 @@ CREATE TABLE users (
 );
 
 -- Crear tabla de estudiantes con relación correcta a users
-CREATE TABLE students (
+CREATE TABLE users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   first_name VARCHAR(100) NOT NULL,
@@ -40,7 +39,7 @@ CREATE TABLE students (
 -- Crear tabla de cuotas
 CREATE TABLE fees (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES users(id) ON DELETE CASCADE,
   amount DECIMAL(10,2) NOT NULL,
   due_date DATE NOT NULL,
   month_year VARCHAR(7) NOT NULL, -- formato: 2024-01
@@ -60,7 +59,7 @@ CREATE TABLE fees (
 -- Crear tabla de asistencia
 CREATE TABLE attendance (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES users(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   present BOOLEAN DEFAULT FALSE,
   notes TEXT,
@@ -79,7 +78,7 @@ CREATE TABLE news (
 );
 
 -- Crear índices para mejorar performance
-CREATE INDEX idx_students_user_id ON students(user_id);
+CREATE INDEX idx_users_user_id ON students(user_id);
 CREATE INDEX idx_fees_student_id ON fees(student_id);
 CREATE INDEX idx_fees_status ON fees(status);
 CREATE INDEX idx_attendance_student_date ON attendance(student_id, date);

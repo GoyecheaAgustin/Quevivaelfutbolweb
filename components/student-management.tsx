@@ -20,10 +20,10 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { UserPlus, Edit, Trash2, Search, QrCode } from "lucide-react"
-import { getStudents, createStudent, updateStudent, deleteStudent } from "@/lib/database"
+import { getUsers, createUser, updateUser, deleteUser } from "@/lib/database"
 import { generateQRCode } from "@/lib/qr-generator"
 
-interface Student {
+interface User {
   id: string
   first_name: string
   last_name: string
@@ -39,13 +39,13 @@ interface Student {
   users?: { email: string }
 }
 
-export default function StudentManagement() {
-  const [students, setStudents] = useState<Student[]>([])
+export default function UserManagement() {
+  const [students, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingStudent, setEditingStudent] = useState<Student | null>(null)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
 
   const [formData, setFormData] = useState({
     first_name: "",
@@ -61,13 +61,13 @@ export default function StudentManagement() {
   })
 
   useEffect(() => {
-    loadStudents()
+    loadUsers()
   }, [])
 
-  const loadStudents = async () => {
+  const loadUsers = async () => {
     try {
-      const data = await getStudents()
-      setStudents(data || [])
+      const data = await getUsers()
+      setUsers(data || [])
     } catch (error) {
       console.error("Error loading students:", error)
     } finally {
@@ -99,13 +99,13 @@ export default function StudentManagement() {
         qr_code: generateQRCode(Date.now().toString(), `${formData.first_name} ${formData.last_name}`),
       }
 
-      if (editingStudent) {
-        await updateStudent(editingStudent.id, studentData)
+      if (editingUser) {
+        await updateUser(editingUser.id, studentData)
       } else {
-        await createStudent(studentData)
+        await createUser(studentData)
       }
 
-      await loadStudents()
+      await loadUsers()
       setIsDialogOpen(false)
       resetForm()
     } catch (error) {
@@ -115,8 +115,8 @@ export default function StudentManagement() {
     }
   }
 
-  const handleEdit = (student: Student) => {
-    setEditingStudent(student)
+  const handleEdit = (student: User) => {
+    setEditingUser(student)
     setFormData({
       first_name: student.first_name,
       last_name: student.last_name,
@@ -135,8 +135,8 @@ export default function StudentManagement() {
   const handleDelete = async (id: string) => {
     if (confirm("¿Estás seguro de que quieres eliminar este estudiante?")) {
       try {
-        await deleteStudent(id)
-        await loadStudents()
+        await deleteUser(id)
+        await loadUsers()
       } catch (error) {
         console.error("Error deleting student:", error)
       }
@@ -156,10 +156,10 @@ export default function StudentManagement() {
       status: "active",
       notes: "",
     })
-    setEditingStudent(null)
+    setEditingUser(null)
   }
 
-  const filteredStudents = students.filter((student) => {
+  const filteredUsers = students.filter((student) => {
     const matchesSearch =
       student.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -201,9 +201,9 @@ export default function StudentManagement() {
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>{editingStudent ? "Editar Estudiante" : "Nuevo Estudiante"}</DialogTitle>
+              <DialogTitle>{editingUser ? "Editar Estudiante" : "Nuevo Estudiante"}</DialogTitle>
               <DialogDescription>
-                {editingStudent ? "Modifica los datos del estudiante" : "Completa los datos del nuevo estudiante"}
+                {editingUser ? "Modifica los datos del estudiante" : "Completa los datos del nuevo estudiante"}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -316,7 +316,7 @@ export default function StudentManagement() {
                   Cancelar
                 </Button>
                 <Button type="submit" disabled={loading}>
-                  {loading ? "Guardando..." : editingStudent ? "Actualizar" : "Crear"}
+                  {loading ? "Guardando..." : editingUser ? "Actualizar" : "Crear"}
                 </Button>
               </div>
             </form>
@@ -367,7 +367,7 @@ export default function StudentManagement() {
       {/* Lista de estudiantes */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Estudiantes ({filteredStudents.length})</CardTitle>
+          <CardTitle>Lista de Estudiantes ({filteredUsers.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -382,7 +382,7 @@ export default function StudentManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStudents.map((student) => (
+              {filteredUsers.map((student) => (
                 <TableRow key={student.id}>
                   <TableCell>
                     <div>

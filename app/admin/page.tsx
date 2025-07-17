@@ -7,8 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, DollarSign, Calendar, BarChart3, LogOut, Loader2, Clock } from "lucide-react"
 import { signOut, getCurrentUser } from "@/lib/auth"
 import { useRouter } from "next/navigation"
-import { getStudents, getFees } from "@/lib/database"
-import StudentManagement from "@/components/student-management"
+import { getusers, getFees } from "@/lib/database"
+import UserManagement from "@/components/student-management"
 import PaymentManagement from "@/components/payment-management"
 import PaymentApproval from "@/components/payment-approval"
 import AttendanceManagement from "@/components/attendance-management"
@@ -22,8 +22,8 @@ export default function AdminDashboard() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
-    totalStudents: 0,
-    activeStudents: 0,
+    totalusers: 0,
+    activeusers: 0,
     pendingPayments: 0,
     pendingApprovals: 0,
     monthlyRevenue: 0,
@@ -53,12 +53,12 @@ export default function AdminDashboard() {
       setCurrentUser(user)
 
       // Cargar estadísticas
-      const [studentsData, feesData] = await Promise.all([getStudents(), getFees()])
+      const [usersData, feesData] = await Promise.all([getusers(), getFees()])
 
-      const students = studentsData || []
+      const users = usersData || []
       const fees = feesData || []
 
-      const activeStudents = students.filter((s) => s.status === "active")
+      const activeusers = users.filter((s) => s.status === "active")
       const pendingFees = fees.filter((f) => f.status === "pending")
       const pendingApprovals = fees.filter((f) => f.status === "pending_approval")
       const paidFees = fees.filter((f) => f.status === "paid")
@@ -68,8 +68,8 @@ export default function AdminDashboard() {
       const monthlyRevenue = paidFees.filter((f) => f.month_year === currentMonth).reduce((sum, f) => sum + f.amount, 0)
 
       setStats({
-        totalStudents: students.length,
-        activeStudents: activeStudents.length,
+        totalusers: users.length,
+        activeusers: activeusers.length,
         pendingPayments: pendingFees.length,
         pendingApprovals: pendingApprovals.length,
         monthlyRevenue: monthlyRevenue,
@@ -125,8 +125,8 @@ export default function AdminDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalStudents}</div>
-              <p className="text-xs text-muted-foreground">{stats.activeStudents} activos</p>
+              <div className="text-2xl font-bold">{stats.totalusers}</div>
+              <p className="text-xs text-muted-foreground">{stats.activeusers} activos</p>
             </CardContent>
           </Card>
 
@@ -176,9 +176,9 @@ export default function AdminDashboard() {
         </div>
 
         {/* Main Content */}
-        <Tabs defaultValue="students" className="space-y-6">
+        <Tabs defaultValue="users" className="space-y-6">
           <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="students">Alumnos</TabsTrigger>
+            <TabsTrigger value="users">Alumnos</TabsTrigger>
             <TabsTrigger value="payments">Pagos</TabsTrigger>
             <TabsTrigger value="approvals" className="relative">
               Aprobaciones
@@ -194,8 +194,8 @@ export default function AdminDashboard() {
             <TabsTrigger value="users">Usuarios</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="students" className="space-y-6">
-            <StudentManagement />
+          <TabsContent value="users" className="space-y-6">
+            <UserManagement />
           </TabsContent>
 
           <TabsContent value="payments" className="space-y-6">

@@ -31,7 +31,7 @@ export async function checkUserExists(email: string): Promise<boolean> {
   }
 }
 
-export async function createStudentUserAction(
+export async function createUserUserAction(
   email: string,
   password: string,
   studentData: {
@@ -126,17 +126,17 @@ export async function createStudentUserAction(
       created_at: new Date().toISOString(),
     };
 
-    const { error: studentError } = await supabaseAdmin.from("students").insert(cleanedData);
+    const { error: studentError } = await supabaseAdmin.from("users").insert(cleanedData);
 
     if (studentError) {
-      console.error("Error al insertar en students:", studentError.message);
+      console.error("Error al insertar en users:", studentError.message);
       throw studentError;
     }
 
     console.log("Estudiante insertado exitosamente");
     return { success: true, message: "¡Cuenta creada exitosamente! Se ha enviado un correo de confirmación." };
   } catch (error: any) {
-    console.error("Excepción en createStudentUserAction - Stack:", error.stack);
+    console.error("Excepción en createUserUserAction - Stack:", error.stack);
     throw new Error(`Error al crear usuario: ${error.message}`);
   }
 }

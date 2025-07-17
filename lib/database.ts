@@ -1,10 +1,10 @@
 import { supabase } from "./supabase"
 import {
-  mockStudents,
+  mockUsers,
   mockFees,
   mockAttendance,
   mockNews,
-  updateMockStudents,
+  updateMockUsers,
   updateMockFees,
   updateMockAttendance,
   updateMockNews,
@@ -14,17 +14,17 @@ import {
 const USE_MOCK_DATA = false
 
 // Funciones para estudiantes
-export async function getStudents() {
+export async function getUsers() {
   if (USE_MOCK_DATA) {
     // Simular delay de red
     await new Promise((resolve) => setTimeout(resolve, 500))
-    return mockStudents
+    return mockUsers
   }
 
   try {
     // Intentar primero con JOIN
     const { data, error } = await supabase
-      .from("students")
+      .from("users")
       .select(`
         *,
         users!inner(email, role)
@@ -35,7 +35,7 @@ export async function getStudents() {
       console.error("Error with JOIN query:", error)
       // Si falla el JOIN, intentar sin él
       const { data: simpleData, error: simpleError } = await supabase
-        .from("students")
+        .from("users")
         .select("*")
         .order("created_at", { ascending: false })
 
@@ -45,32 +45,34 @@ export async function getStudents() {
 
     return data
   } catch (error) {
-    console.error("Error in getStudents:", error)
+    console.error("Error in getUsers:", error)
     throw error
   }
 }
 
-export async function getStudentByUserId(userId: string) {
+export async function getUserByUserId(userId: string) {
   if (USE_MOCK_DATA) {
     await new Promise((resolve) => setTimeout(resolve, 500))
-    return mockStudents.find((s) => s.user_id === userId)
+    return mockUsers.find((s) => s.user_id === userId)
   }
 
   try {
-    const { data, error } = await supabase.from("students").select("*").eq("user_id", userId).single()
+    const { data, error } = await supabase.from("users").select("*").eq("id", userId).single()
+
+    console.log("🔍 Buscando estudiante con auth_id:", userId)
 
     if (error && error.code !== "PGRST116") throw error
     return data
   } catch (error) {
-    console.error("Error in getStudentByUserId:", error)
+    console.error("Error in getUserByUserId:", error)
     throw error
   }
 }
 
-export async function createStudent(studentData: any) {
+export async function createUser(studentData: any) {
   if (USE_MOCK_DATA) {
     await new Promise((resolve) => setTimeout(resolve, 500))
-    const newStudent = {
+    const newUser = {
       ...studentData,
       id: `student-${Date.now()}`,
       created_at: new Date().toISOString(),
@@ -78,46 +80,46 @@ export async function createStudent(studentData: any) {
       users: { email: `${studentData.first_name.toLowerCase()}@escuela.com`, role: "student" },
       fees: [],
     }
-    updateMockStudents([...mockStudents, newStudent])
-    return newStudent
+    updateMockUsers([...mockUsers, newUser])
+    return newUser
   }
 
-  const { data, error } = await supabase.from("students").insert([studentData]).select()
+  const { data, error } = await supabase.from("users").insert([studentData]).select()
   if (error) throw error
   return data[0]
 }
 
-export async function updateStudent(id: string, studentData: any) {
+export async function updateUser(id: string, studentData: any) {
   if (USE_MOCK_DATA) {
     await new Promise((resolve) => setTimeout(resolve, 500))
-    const index = mockStudents.findIndex((s) => s.id === id)
+    const index = mockUsers.findIndex((s) => s.id === id)
     if (index !== -1) {
-      const updatedStudents = [...mockStudents]
-      updatedStudents[index] = { ...updatedStudents[index], ...studentData, updated_at: new Date().toISOString() }
-      updateMockStudents(updatedStudents)
-      return updatedStudents[index]
+      const updatedUsers = [...mockUsers]
+      updatedUsers[index] = { ...updatedUsers[index], ...studentData, updated_at: new Date().toISOString() }
+      updateMockUsers(updatedUsers)
+      return updatedUsers[index]
     }
-    throw new Error("Student not found")
+    throw new Error("User not found")
   }
 
-  const { data, error } = await supabase.from("students").update(studentData).eq("id", id).select()
+  const { data, error } = await supabase.from("users").update(studentData).eq("id", id).select()
   if (error) throw error
   return data[0]
 }
 
-export async function deleteStudent(id: string) {
+export async function deleteUser(id: string) {
   if (USE_MOCK_DATA) {
     await new Promise((resolve) => setTimeout(resolve, 500))
-    const index = mockStudents.findIndex((s) => s.id === id)
+    const index = mockUsers.findIndex((s) => s.id === id)
     if (index !== -1) {
-      const updatedStudents = mockStudents.filter((s) => s.id !== id)
-      updateMockStudents(updatedStudents)
+      const updatedUsers = mockUsers.filter((s) => s.id !== id)
+      updateMockUsers(updatedUsers)
       return
     }
-    throw new Error("Student not found")
+    throw new Error("User not found")
   }
 
-  const { error } = await supabase.from("students").delete().eq("id", id)
+  const { error } = await supabase.from("users").delete().eq("id", id)
   if (error) throw error
 }
 
@@ -135,7 +137,7 @@ export async function getFees(studentId?: string) {
   try {
     let query = supabase.from("fees").select(`
       *,
-      students!inner(first_name, last_name)
+      users!inner(first_name, last_name)
     `)
 
     if (studentId) {
@@ -166,22 +168,37 @@ export async function getFees(studentId?: string) {
 export async function createFee(feeData: any) {
   if (USE_MOCK_DATA) {
     await new Promise((resolve) => setTimeout(resolve, 500))
-    const student = mockStudents.find((s) => s.id === feeData.student_id)
+    const student = mockUsers.find((s) => s.id === feeData.student_id)
     const newFee = {
       ...feeData,
       id: `fee-${Date.now()}`,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      students: student ? { first_name: student.first_name, last_name: student.last_name } : null,
+      users: student ? { first_name: student.first_name, last_name: student.last_name } : null,
     }
     updateMockFees([...mockFees, newFee])
     return newFee
   }
 
-  const { data, error } = await supabase.from("fees").insert([feeData]).select()
+  // Si no se pasa due_date, lo generamos automáticamente (día 10 del mes)
+  const dueDate = feeData.due_date
+    ? feeData.due_date
+    : new Date(feeData.year, feeData.month - 1, 10).toISOString().split("T")[0]
+
+  const { data, error } = await supabase
+    .from("fees")
+    .insert([
+      {
+        ...feeData,
+        due_date: dueDate,
+      },
+    ])
+    .select()
+
   if (error) throw error
   return data[0]
 }
+
 
 export async function updateFee(id: string, feeData: any) {
   if (USE_MOCK_DATA) {
@@ -215,7 +232,7 @@ export async function getAttendance(date?: string) {
   try {
     let query = supabase.from("attendance").select(`
       *,
-      students!inner(first_name, last_name, category)
+      users!inner(first_name, last_name, category)
     `)
 
     if (date) {
@@ -253,12 +270,12 @@ export async function markAttendance(attendanceData: any[]) {
         (att) => att.student_id === newRecord.student_id && att.date === newRecord.date,
       )
 
-      const student = mockStudents.find((s) => s.id === newRecord.student_id)
-      const recordWithStudent = {
+      const student = mockUsers.find((s) => s.id === newRecord.student_id)
+      const recordWithUser = {
         ...newRecord,
         id: existingIndex !== -1 ? updatedAttendance[existingIndex].id : `att-${Date.now()}-${newRecord.student_id}`,
         created_at: existingIndex !== -1 ? updatedAttendance[existingIndex].created_at : new Date().toISOString(),
-        students: student
+        users: student
           ? {
               first_name: student.first_name,
               last_name: student.last_name,
@@ -268,9 +285,9 @@ export async function markAttendance(attendanceData: any[]) {
       }
 
       if (existingIndex !== -1) {
-        updatedAttendance[existingIndex] = recordWithStudent
+        updatedAttendance[existingIndex] = recordWithUser
       } else {
-        updatedAttendance.push(recordWithStudent)
+        updatedAttendance.push(recordWithUser)
       }
     })
     updateMockAttendance(updatedAttendance)

@@ -14,15 +14,15 @@ const saveMockData = (key: string, data: any) => {
   }
 }
 
-export let mockStudents = loadMockData("mockStudents", [])
+export let mockUsers = loadMockData("mockUsers", [])
 export let mockFees = loadMockData("mockFees", [])
 export let mockAttendance = loadMockData("mockAttendance", [])
 export let mockNews = loadMockData("mockNews", [])
 
-// Función para actualizar y guardar mockStudents
-export const updateMockStudents = (newStudents: any[]) => {
-  mockStudents = newStudents
-  saveMockData("mockStudents", mockStudents)
+// Función para actualizar y guardar mockUsers
+export const updateMockUsers = (newUsers: any[]) => {
+  mockUsers = newUsers
+  saveMockData("mockUsers", mockUsers)
 }
 
 // Función para actualizar y guardar mockFees
@@ -45,11 +45,11 @@ export const updateMockNews = (newNews: any[]) => {
 
 // Función para resetear todos los datos mock (útil para desarrollo)
 export const resetAllMockData = () => {
-  mockStudents = []
+  mockUsers = []
   mockFees = []
   mockAttendance = []
   mockNews = []
-  saveMockData("mockStudents", [])
+  saveMockData("mockUsers", [])
   saveMockData("mockFees", [])
   saveMockData("mockAttendance", [])
   saveMockData("mockNews", [])

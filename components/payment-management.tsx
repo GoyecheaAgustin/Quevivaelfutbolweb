@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DollarSign, Download, Mail, CreditCard, Plus } from "lucide-react"
-import { getFees, createFee, updateFee, getStudents } from "@/lib/database"
+import { getFees, createFee, updateFee, getusers } from "@/lib/database"
 import { generatePaymentReceipt, downloadPDF } from "@/lib/pdf-generator"
 import { sendPaymentReminder } from "@/lib/notifications"
 
@@ -32,12 +32,12 @@ interface Fee {
   status: string
   payment_method?: string
   payment_date?: string
-  students?: { first_name: string; last_name: string }
+  users?: { first_name: string; last_name: string }
 }
 
 export default function PaymentManagement() {
   const [fees, setFees] = useState<Fee[]>([])
-  const [students, setStudents] = useState<any[]>([])
+  const [users, setusers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedStatus, setSelectedStatus] = useState("all")
@@ -55,9 +55,9 @@ export default function PaymentManagement() {
 
   const loadData = async () => {
     try {
-      const [feesData, studentsData] = await Promise.all([getFees(), getStudents()])
+      const [feesData, usersData] = await Promise.all([getFees(), getusers()])
       setFees(feesData || [])
-      setStudents(studentsData || [])
+      setusers(usersData || [])
     } catch (error) {
       console.error("Error loading data:", error)
     } finally {
@@ -108,14 +108,14 @@ export default function PaymentManagement() {
     try {
       const receiptData = {
         id: fee.id,
-        studentName: `${fee.students?.first_name} ${fee.students?.last_name}`,
+        studentName: `${fee.users?.first_name} ${fee.users?.last_name}`,
         amount: fee.amount,
         date: fee.payment_date,
         month: fee.month_year,
       }
 
       const pdfBlob = await generatePaymentReceipt(receiptData)
-      downloadPDF(pdfBlob, `recibo-${fee.month_year}-${fee.students?.first_name}.pdf`)
+      downloadPDF(pdfBlob, `recibo-${fee.month_year}-${fee.users?.first_name}.pdf`)
     } catch (error) {
       console.error("Error generating receipt:", error)
     }
@@ -123,7 +123,7 @@ export default function PaymentManagement() {
 
   const handleSendReminder = async (fee: Fee) => {
     try {
-      const studentName = `${fee.students?.first_name} ${fee.students?.last_name}`
+      const studentName = `${fee.users?.first_name} ${fee.users?.last_name}`
       await sendPaymentReminder(
         "student@example.com", // En producción obtener del estudiante
         studentName,
@@ -141,9 +141,9 @@ export default function PaymentManagement() {
     const monthYear = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`
 
     try {
-      const activeStudents = students.filter((s) => s.status === "active")
+      const activeusers = users.filter((s) => s.status === "active")
 
-      for (const student of activeStudents) {
+      for (const student of activeusers) {
         await createFee({
           student_id: student.id,
           amount: 15000, // Monto base
@@ -154,7 +154,7 @@ export default function PaymentManagement() {
       }
 
       await loadData()
-      alert(`Se generaron ${activeStudents.length} cuotas para ${monthYear}`)
+      alert(`Se generaron ${activeusers.length} cuotas para ${monthYear}`)
     } catch (error) {
       console.error("Error generating monthly fees:", error)
     }
@@ -213,7 +213,7 @@ export default function PaymentManagement() {
                       <SelectValue placeholder="Seleccionar estudiante" />
                     </SelectTrigger>
                     <SelectContent>
-                      {students.map((student) => (
+                      {users.map((student) => (
                         <SelectItem key={student.id} value={student.id}>
                           {student.first_name} {student.last_name} - {student.category}
                         </SelectItem>
@@ -361,7 +361,7 @@ export default function PaymentManagement() {
                   <TableCell>
                     <div>
                       <p className="font-medium">
-                        {fee.students?.first_name} {fee.students?.last_name}
+                        {fee.users?.first_name} {fee.users?.last_name}
                       </p>
                     </div>
                   </TableCell>

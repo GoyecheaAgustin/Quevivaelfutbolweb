@@ -2,8 +2,8 @@
 DELETE FROM attendance;
 DELETE FROM fees;
 DELETE FROM news;
-DELETE FROM students;
 DELETE FROM users;
+
 
 -- Crear tu usuario administrador
 -- Email: nitsuga022@gmail.com

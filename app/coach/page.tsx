@@ -8,7 +8,7 @@ import { signOut, getCurrentUser } from "@/lib/auth"
 import { useRouter } from "next/navigation"
 import AttendanceManagement from "@/components/attendance-management"
 import PaymentApproval from "@/components/payment-approval"
-import { getStudents, getAttendance } from "@/lib/database"
+import { getusers, getAttendance } from "@/lib/database"
 import { useEffect, useState } from "react"
 // Cambiar la importación del logo
 import { LogoCompact } from "@/components/logo"
@@ -19,7 +19,7 @@ export default function CoachDashboard() {
   const [loading, setLoading] = useState(true)
 
   const [stats, setStats] = useState({
-    totalStudents: 0,
+    totalusers: 0,
     presentToday: 0,
     attendanceRate: 0,
   })
@@ -47,19 +47,19 @@ export default function CoachDashboard() {
       setCurrentUser(user)
 
       // Cargar estadísticas
-      const [studentsData, attendanceData] = await Promise.all([
-        getStudents(),
+      const [usersData, attendanceData] = await Promise.all([
+        getusers(),
         getAttendance(new Date().toISOString().split("T")[0]),
       ])
 
-      const activeStudents = studentsData?.filter((s) => s.status === "active") || []
+      const activeusers = usersData?.filter((s) => s.status === "active") || []
       const todayAttendance = attendanceData || []
       const presentCount = todayAttendance.filter((a) => a.present).length
 
       setStats({
-        totalStudents: activeStudents.length,
+        totalusers: activeusers.length,
         presentToday: presentCount,
-        attendanceRate: activeStudents.length > 0 ? Math.round((presentCount / activeStudents.length) * 100) : 0,
+        attendanceRate: activeusers.length > 0 ? Math.round((presentCount / activeusers.length) * 100) : 0,
       })
     } catch (error) {
       console.error("Error loading data:", error)
@@ -112,7 +112,7 @@ export default function CoachDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalStudents}</div>
+              <div className="text-2xl font-bold">{stats.totalusers}</div>
               <p className="text-xs text-muted-foreground">En todas las categorías</p>
             </CardContent>
           </Card>
@@ -124,7 +124,7 @@ export default function CoachDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {stats.presentToday}/{stats.totalStudents}
+                {stats.presentToday}/{stats.totalusers}
               </div>
               <p className="text-xs text-muted-foreground">{stats.attendanceRate}% de asistencia</p>
             </CardContent>
@@ -147,7 +147,7 @@ export default function CoachDashboard() {
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="attendance">Asistencia</TabsTrigger>
             <TabsTrigger value="approvals">Aprobaciones</TabsTrigger>
-            <TabsTrigger value="students">Estudiantes</TabsTrigger>
+            <TabsTrigger value="users">Estudiantes</TabsTrigger>
             <TabsTrigger value="notes">Observaciones</TabsTrigger>
           </TabsList>
 
@@ -159,7 +159,7 @@ export default function CoachDashboard() {
             <PaymentApproval />
           </TabsContent>
 
-          <TabsContent value="students" className="space-y-6">
+          <TabsContent value="users" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Lista de Estudiantes</CardTitle>

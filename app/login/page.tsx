@@ -28,15 +28,25 @@ export default function LoginPage() {
     setError("")
 
     try {
-      await signIn(email, password)
-      router.push("/dashboard")
+      const result = await signIn(email, password)
+      console.log("🎯 Resultado de signIn:", result)
+
+      if (result.requiresProfile) {
+        console.log("➡️ Redirigiendo a completar-perfil")
+        router.push("/completar-perfil")
+      } else {
+        console.log("➡️ Redirigiendo a dashboard")
+        router.push("/dashboard")
+      }
     } catch (err: any) {
-      console.error("Login error:", err)
-      setError(err.message || "Error al iniciar sesión. Verifica tus credenciales.")
+      setError(err.message || "Error al iniciar sesión")
+      console.error("🧨 Error en login:", err)
     } finally {
       setLoading(false)
     }
   }
+
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-green-50 to-white p-4">

@@ -38,7 +38,7 @@ export function Logo({ width = 120, height = 120, className, priority = false }:
   return (
     <div className={cn("relative inline-block", className)}>
       <Image
-        src="/images/logo.png"
+        src="/images/logo-oficial.png"
         alt="Que Viva El Fútbol - Profe Beto"
         width={width}
         height={height}
@@ -61,7 +61,7 @@ export function LogoHero({ width = 220, height = 220, className, priority = fals
     <div className={cn("relative inline-block logo-container", className)}>
       <div className="relative animate-float">
         <Image
-          src="/images/logo.png"
+          src="/images/logo-oficial.png"
           alt="Que Viva El Fútbol - Profe Beto"
           width={width}
           height={height}
@@ -84,7 +84,7 @@ export function LogoCompact({ width = 50, height = 50, className, priority = fal
   return (
     <div className={cn("relative inline-block logo-dashboard", className)}>
       <Image
-        src="/images/logo.png"
+        src="/images/logo-oficial.png"
         alt="Que Viva El Fútbol - Profe Beto"
         width={width}
         height={height}
@@ -106,7 +106,7 @@ export function LogoRegister({ width = 140, height = 140, className, priority = 
   return (
     <div className={cn("relative inline-block", className)}>
       <Image
-        src="/images/logo.png"
+        src="/images/logo-oficial.png"
         alt="Que Viva El Fútbol - Profe Beto"
         width={width}
         height={height}
@@ -134,7 +134,7 @@ export function LogoFooter({ width = 80, height = 80, className, priority = fals
   return (
     <div className={cn("relative inline-block opacity-90 hover:opacity-100 transition-opacity", className)}>
       <Image
-        src="/images/logo.png"
+        src="/images/logo-oficial.png"
         alt="Que Viva El Fútbol - Profe Beto"
         width={width}
         height={height}

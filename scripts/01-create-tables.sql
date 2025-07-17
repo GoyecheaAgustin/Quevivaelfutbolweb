@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Crear tabla de estudiantes
-CREATE TABLE IF NOT EXISTS students (
+CREATE TABLE IF NOT EXISTS users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   first_name VARCHAR(100) NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS students (
 -- Crear tabla de cuotas
 CREATE TABLE IF NOT EXISTS fees (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES users(id) ON DELETE CASCADE,
   amount DECIMAL(10,2) NOT NULL,
   due_date DATE NOT NULL,
   month_year VARCHAR(7) NOT NULL, -- formato: 2024-01
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS fees (
 -- Crear tabla de asistencia
 CREATE TABLE IF NOT EXISTS attendance (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES users(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   present BOOLEAN DEFAULT FALSE,
   notes TEXT,
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS news (
 );
 
 -- Crear índices para mejorar performance
-CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id);
+CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id);
 CREATE INDEX IF NOT EXISTS idx_fees_student_id ON fees(student_id);
 CREATE INDEX IF NOT EXISTS idx_fees_status ON fees(status);
 CREATE INDEX IF NOT EXISTS idx_attendance_student_date ON attendance(student_id, date);
@@ -78,7 +78,7 @@ INSERT INTO users (id, email, password_hash, role) VALUES
   ('550e8400-e29b-41d4-a716-446655440003', 'entrenador@escuela.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'coach');
 
 -- Insertar datos de estudiante de prueba
-INSERT INTO students (id, user_id, first_name, last_name, date_of_birth, phone, parent_name, parent_phone, address, category, qr_code) VALUES 
+INSERT INTO users (id, user_id, first_name, last_name, date_of_birth, phone, parent_name, parent_phone, address, category, qr_code) VALUES 
   ('660e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440002', 'Juan', 'Pérez', '2010-05-15', '1234567890', 'María Pérez', '0987654321', 'Av. Principal 123', 'Sub-15', 'STU-001-2024');
 
 -- Insertar cuotas de prueba

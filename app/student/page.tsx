@@ -8,22 +8,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { User, CreditCard, QrCode, Download, LogOut, Loader2 } from "lucide-react"
 import { signOut, getCurrentUser } from "@/lib/auth"
 import { useRouter } from "next/navigation"
-import { getStudentByUserId, getFees } from "@/lib/database"
+import { getUserByUserId, getFees } from "@/lib/database"
 import PaymentInterface from "@/components/payment-interface"
 import { LogoCompact } from "@/components/logo"
 
-export default function StudentDashboard() {
-  const [studentData, setStudentData] = useState<any>(null)
+export default function UserDashboard() {
+  const [studentData, setUserData] = useState<any>(null)
   const [fees, setFees] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const router = useRouter()
 
   useEffect(() => {
-    loadStudentData()
+    loadUserData()
   }, [])
 
-  const loadStudentData = async () => {
+  const loadUserData = async () => {
     try {
       setLoading(true)
       setError("")
@@ -36,14 +36,14 @@ export default function StudentDashboard() {
       }
 
       // Obtener datos del estudiante usando la nueva función específica
-      const student = await getStudentByUserId(currentUser.id)
+      const student = await getUserByUserId(currentUser.id)
 
       if (!student) {
         setError("No se encontraron datos del estudiante. Contacta al administrador.")
         return
       }
 
-      setStudentData({
+      setUserData({
         id: student.id,
         name: `${student.first_name} ${student.last_name}`,
         firstName: student.first_name,
@@ -121,7 +121,7 @@ export default function StudentDashboard() {
           <div className="bg-red-50 border border-red-200 rounded-lg p-6">
             <p className="text-red-800 mb-4">{error}</p>
             <div className="space-y-2">
-              <Button onClick={loadStudentData} variant="outline" className="w-full bg-transparent">
+              <Button onClick={loadUserData} variant="outline" className="w-full bg-transparent">
                 Reintentar
               </Button>
               <Button onClick={() => router.push("/login")} className="w-full">
@@ -310,7 +310,7 @@ export default function StudentDashboard() {
                     dueDate: nextPayment.due_date,
                     status: nextPayment.status,
                   }}
-                  onPaymentComplete={loadStudentData}
+                  onPaymentComplete={loadUserData}
                 />
               )}
             </div>
@@ -357,7 +357,7 @@ export default function StudentDashboard() {
                                 dueDate: fee.due_date,
                                 status: fee.status,
                               }}
-                              onPaymentComplete={loadStudentData}
+                              onPaymentComplete={loadUserData}
                             />
                           )}
                         </div>

@@ -7,11 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { BarChart3, Download, Calendar, DollarSign, Users, TrendingUp } from "lucide-react"
-import { getStudents, getFees, getAttendance } from "@/lib/database"
+import { getusers, getFees, getAttendance } from "@/lib/database"
 import { generateReport, downloadPDF } from "@/lib/pdf-generator"
 
 export default function ReportsManagement() {
-  const [students, setStudents] = useState<any[]>([])
+  const [users, setusers] = useState<any[]>([])
   const [fees, setFees] = useState<any[]>([])
   const [attendance, setAttendance] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,9 +23,9 @@ export default function ReportsManagement() {
 
   const loadData = async () => {
     try {
-      const [studentsData, feesData, attendanceData] = await Promise.all([getStudents(), getFees(), getAttendance()])
+      const [usersData, feesData, attendanceData] = await Promise.all([getusers(), getFees(), getAttendance()])
 
-      setStudents(studentsData || [])
+      setusers(usersData || [])
       setFees(feesData || [])
       setAttendance(attendanceData || [])
     } catch (error) {
@@ -55,8 +55,8 @@ export default function ReportsManagement() {
 
   const generateDebtorsReport = async () => {
     const debtors = fees.filter((fee) => fee.status === "pending" || fee.status === "overdue")
-    const debtorsByStudent = debtors.reduce((acc, fee) => {
-      const studentName = `${fee.students?.first_name} ${fee.students?.last_name}`
+    const debtorsByUser = debtors.reduce((acc, fee) => {
+      const studentName = `${fee.users?.first_name} ${fee.users?.last_name}`
       if (!acc[studentName]) {
         acc[studentName] = { name: studentName, debt: 0, fees: [] }
       }
@@ -66,9 +66,9 @@ export default function ReportsManagement() {
     }, {} as any)
 
     const reportData = {
-      totalDebtors: Object.keys(debtorsByStudent).length,
-      totalDebt: Object.values(debtorsByStudent).reduce((sum: number, debtor: any) => sum + debtor.debt, 0),
-      debtors: Object.values(debtorsByStudent),
+      totalDebtors: Object.keys(debtorsByUser).length,
+      totalDebt: Object.values(debtorsByUser).reduce((sum: number, debtor: any) => sum + debtor.debt, 0),
+      debtors: Object.values(debtorsByUser),
     }
 
     const pdfBlob = await generateReport("debtors", reportData)
@@ -84,8 +84,8 @@ export default function ReportsManagement() {
       return recordDate >= monthStart && recordDate <= monthEnd
     })
 
-    const attendanceByStudent = monthlyAttendance.reduce((acc, record) => {
-      const studentName = `${record.students?.first_name} ${record.students?.last_name}`
+    const attendanceByUser = monthlyAttendance.reduce((acc, record) => {
+      const studentName = `${record.users?.first_name} ${record.users?.last_name}`
       if (!acc[studentName]) {
         acc[studentName] = { name: studentName, present: 0, total: 0 }
       }
@@ -98,13 +98,13 @@ export default function ReportsManagement() {
       month: selectedMonth,
       totalSessions: new Set(monthlyAttendance.map((r) => r.date)).size,
       averageAttendance:
-        (Object.values(attendanceByStudent).reduce(
+        (Object.values(attendanceByUser).reduce(
           (sum: number, student: any) => sum + student.present / student.total,
           0,
         ) /
-          Object.keys(attendanceByStudent).length) *
+          Object.keys(attendanceByUser).length) *
         100,
-      studentAttendance: Object.values(attendanceByStudent),
+      studentAttendance: Object.values(attendanceByUser),
     }
 
     const pdfBlob = await generateReport("attendance", reportData)
@@ -112,8 +112,8 @@ export default function ReportsManagement() {
   }
 
   // Calcular estadísticas
-  const totalStudents = students.length
-  const activeStudents = students.filter((s) => s.status === "active").length
+  const totalusers = users.length
+  const activeusers = users.filter((s) => s.status === "active").length
   const totalRevenue = fees.filter((f) => f.status === "paid").reduce((sum, f) => sum + f.amount, 0)
   const pendingPayments = fees.filter((f) => f.status === "pending").length
   const averageAttendance =
@@ -125,7 +125,7 @@ export default function ReportsManagement() {
       const key = fee.student_id
       if (!acc[key]) {
         acc[key] = {
-          studentName: `${fee.students?.first_name} ${fee.students?.last_name}`,
+          studentName: `${fee.users?.first_name} ${fee.users?.last_name}`,
           totalDebt: 0,
           feesCount: 0,
         }
@@ -164,8 +164,8 @@ export default function ReportsManagement() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStudents}</div>
-            <p className="text-xs text-muted-foreground">{activeStudents} activos</p>
+            <div className="text-2xl font-bold">{totalusers}</div>
+            <p className="text-xs text-muted-foreground">{activeusers} activos</p>
           </CardContent>
         </Card>
 
