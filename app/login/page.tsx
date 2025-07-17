@@ -10,8 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { signIn } from "@/lib/auth"
-import { GraduationCap } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import Link from "next/link"
+import { Logo } from "@/components/logo"
+import { DbConnectionStatus } from "@/components/db-connection-status"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -29,23 +31,27 @@ export default function LoginPage() {
       await signIn(email, password)
       router.push("/dashboard")
     } catch (err: any) {
-      setError(err.message || "Error al iniciar sesión")
+      console.error("Login error:", err)
+      setError(err.message || "Error al iniciar sesión. Verifica tus credenciales.")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-green-50 to-white p-4">
+      <div className="absolute top-4 left-4 right-4 max-w-md mx-auto">
+        <DbConnectionStatus />
+      </div>
+      <Card className="w-full max-w-md shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="bg-green-600 p-3 rounded-full">
-              <GraduationCap className="h-8 w-8 text-white" />
+          <div className="flex justify-center mb-6">
+            <div className="logo-login">
+              <Logo width={140} height={140} priority />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold text-green-800">Escuela de Fútbol</CardTitle>
-          <CardDescription>Ingresa a tu cuenta para continuar</CardDescription>
+          <CardTitle className="text-2xl font-bold text-blue-800">Que Viva El Fútbol</CardTitle>
+          <CardDescription className="text-gray-600">Ingresa a tu cuenta para continuar</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -58,6 +64,8 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@email.com"
                 required
+                disabled={loading}
+                className="border-blue-200 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
             <div className="space-y-2">
@@ -69,6 +77,8 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                disabled={loading}
+                className="border-blue-200 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
             {error && (
@@ -76,40 +86,25 @@ export default function LoginPage() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={loading}>
-              {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
+            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 shadow-lg" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Iniciando sesión...
+                </>
+              ) : (
+                "Iniciar Sesión"
+              )}
             </Button>
           </form>
 
-          <div className="mt-6 text-center space-y-4">
+          <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
               ¿No tienes cuenta?{" "}
-              <Link href="/register" className="text-green-600 hover:text-green-700 font-medium">
+              <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
                 Crear Cuenta
               </Link>
             </p>
-
-            {/* Usuarios de prueba */}
-            <div className="border-t pt-4">
-              <p className="text-xs text-gray-500 mb-3">Usuarios de prueba:</p>
-              <div className="space-y-2 text-xs">
-                <div className="bg-gray-50 p-2 rounded">
-                  <p className="font-medium">👤 Administrador</p>
-                  <p>Email: admin@escuela.com</p>
-                  <p>Contraseña: password</p>
-                </div>
-                <div className="bg-gray-50 p-2 rounded">
-                  <p className="font-medium">🎓 Alumno</p>
-                  <p>Email: alumno@escuela.com</p>
-                  <p>Contraseña: password</p>
-                </div>
-                <div className="bg-gray-50 p-2 rounded">
-                  <p className="font-medium">⚽ Entrenador</p>
-                  <p>Email: entrenador@escuela.com</p>
-                  <p>Contraseña: password</p>
-                </div>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>

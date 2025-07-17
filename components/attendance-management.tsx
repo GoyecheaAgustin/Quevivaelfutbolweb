@@ -29,6 +29,7 @@ export default function AttendanceManagement() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -36,7 +37,18 @@ export default function AttendanceManagement() {
 
   const loadData = async () => {
     try {
-      const [studentsData, attendanceData] = await Promise.all([getStudents(), getAttendance(selectedDate)])
+      setLoading(true)
+      setError(null)
+      const [studentsData, attendanceData] = await Promise.all([
+        getStudents().catch((err) => {
+          console.error("Error loading students:", err)
+          return []
+        }),
+        getAttendance(selectedDate).catch((err) => {
+          console.error("Error loading attendance:", err)
+          return []
+        }),
+      ])
 
       const activeStudents = studentsData?.filter((s) => s.status === "active") || []
       setStudents(activeStudents)
@@ -57,6 +69,10 @@ export default function AttendanceManagement() {
       setAttendance(initialAttendance)
     } catch (error) {
       console.error("Error loading data:", error)
+      // Establecer datos vacíos en caso de error
+      setStudents([])
+      setAttendance([])
+      setError("Error al cargar los datos. Intenta nuevamente.")
     } finally {
       setLoading(false)
     }
@@ -114,6 +130,15 @@ export default function AttendanceManagement() {
           </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <p className="text-red-800">{error}</p>
+          <Button onClick={loadData} variant="outline" size="sm" className="mt-2 bg-transparent">
+            Reintentar
+          </Button>
+        </div>
+      )}
 
       {/* Estadísticas del día */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

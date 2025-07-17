@@ -75,6 +75,20 @@ export default function StudentManagement() {
     }
   }
 
+  const calculateCategory = (birthDate: string) => {
+    if (!birthDate) return ""
+    const birth = new Date(birthDate)
+    return birth.getFullYear().toString()
+  }
+
+  const handleBirthDateChange = (date: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      date_of_birth: date,
+      category: calculateCategory(date),
+    }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -169,6 +183,11 @@ export default function StudentManagement() {
     }
   }
 
+  // Obtener años únicos para el filtro
+  const availableYears = [...new Set(students.map((s) => s.category))].sort(
+    (a, b) => Number.parseInt(b) - Number.parseInt(a),
+  )
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -216,17 +235,28 @@ export default function StudentManagement() {
                     id="date_of_birth"
                     type="date"
                     value={formData.date_of_birth}
-                    onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
+                    onChange={(e) => handleBirthDateChange(e.target.value)}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="phone">Teléfono</Label>
+                  <Label htmlFor="category">Categoría (Año de Nacimiento)</Label>
                   <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    id="category"
+                    value={formData.category}
+                    placeholder="Se calcula automáticamente"
+                    disabled
+                    className="bg-gray-50"
                   />
                 </div>
+              </div>
+
+              <div>
+                <Label htmlFor="phone">Teléfono</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -257,42 +287,18 @@ export default function StudentManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="category">Categoría</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) => setFormData({ ...formData, category: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Sub-8">Sub-8</SelectItem>
-                      <SelectItem value="Sub-10">Sub-10</SelectItem>
-                      <SelectItem value="Sub-12">Sub-12</SelectItem>
-                      <SelectItem value="Sub-15">Sub-15</SelectItem>
-                      <SelectItem value="Sub-17">Sub-17</SelectItem>
-                      <SelectItem value="Adultos">Adultos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="status">Estado</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData({ ...formData, status: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Activo</SelectItem>
-                      <SelectItem value="inactive">Inactivo</SelectItem>
-                      <SelectItem value="suspended">Suspendido</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <Label htmlFor="status">Estado</Label>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Activo</SelectItem>
+                    <SelectItem value="inactive">Inactivo</SelectItem>
+                    <SelectItem value="suspended">Suspendido</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -339,19 +345,18 @@ export default function StudentManagement() {
               </div>
             </div>
             <div>
-              <Label htmlFor="category">Categoría</Label>
+              <Label htmlFor="category">Año de Nacimiento</Label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="Sub-8">Sub-8</SelectItem>
-                  <SelectItem value="Sub-10">Sub-10</SelectItem>
-                  <SelectItem value="Sub-12">Sub-12</SelectItem>
-                  <SelectItem value="Sub-15">Sub-15</SelectItem>
-                  <SelectItem value="Sub-17">Sub-17</SelectItem>
-                  <SelectItem value="Adultos">Adultos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {availableYears.map((year) => (
+                    <SelectItem key={year} value={year}>
+                      {year}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -369,7 +374,7 @@ export default function StudentManagement() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
-                <TableHead>Categoría</TableHead>
+                <TableHead>Año de Nacimiento</TableHead>
                 <TableHead>Padre/Tutor</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>QR Code</TableHead>
@@ -387,7 +392,9 @@ export default function StudentManagement() {
                       <p className="text-sm text-gray-500">{student.users?.email}</p>
                     </div>
                   </TableCell>
-                  <TableCell>{student.category}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{student.category}</Badge>
+                  </TableCell>
                   <TableCell>
                     <div>
                       <p>{student.parent_name}</p>

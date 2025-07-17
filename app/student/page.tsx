@@ -1,44 +1,76 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { User, CreditCard, QrCode, Download, Upload, LogOut } from "lucide-react"
-import { signOut } from "@/lib/auth"
+import { User, CreditCard, QrCode, Download, LogOut, Loader2 } from "lucide-react"
+import { signOut, getCurrentUser } from "@/lib/auth"
 import { useRouter } from "next/navigation"
+import { getStudentByUserId, getFees } from "@/lib/database"
 import PaymentInterface from "@/components/payment-interface"
+import { LogoCompact } from "@/components/logo"
 
 export default function StudentDashboard() {
-  const [studentData, setStudentData] = useState({
-    name: "Juan Pérez",
-    category: "Sub-15",
-    status: "Activo",
-    nextPayment: "2024-02-15",
-    qrCode: "STU-001-2024",
-  })
-
-  const [fees, setFees] = useState([
-    {
-      id: 1,
-      month: "Enero 2024",
-      amount: 15000,
-      dueDate: "2024-01-15",
-      status: "paid",
-      paymentDate: "2024-01-10",
-    },
-    {
-      id: 2,
-      month: "Febrero 2024",
-      amount: 15000,
-      dueDate: "2024-02-15",
-      status: "pending",
-      paymentDate: null,
-    },
-  ])
-
+  const [studentData, setStudentData] = useState<any>(null)
+  const [fees, setFees] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const router = useRouter()
+
+  useEffect(() => {
+    loadStudentData()
+  }, [])
+
+  const loadStudentData = async () => {
+    try {
+      setLoading(true)
+      setError("")
+
+      // Obtener usuario actual
+      const currentUser = await getCurrentUser()
+      if (!currentUser) {
+        router.push("/login")
+        return
+      }
+
+      // Obtener datos del estudiante usando la nueva función específica
+      const student = await getStudentByUserId(currentUser.id)
+
+      if (!student) {
+        setError("No se encontraron datos del estudiante. Contacta al administrador.")
+        return
+      }
+
+      setStudentData({
+        id: student.id,
+        name: `${student.first_name} ${student.last_name}`,
+        firstName: student.first_name,
+        lastName: student.last_name,
+        email: currentUser.email,
+        category: student.category,
+        status: student.status,
+        qrCode: student.qr_code,
+        phone: student.phone,
+        parentName: student.parent_name,
+        parentPhone: student.parent_phone,
+        parentEmail: student.parent_email,
+        address: student.address,
+        enrollmentDate: student.enrollment_date,
+        notes: student.notes,
+      })
+
+      // Obtener cuotas del estudiante
+      const studentFees = await getFees(student.id)
+      setFees(studentFees || [])
+    } catch (err: any) {
+      console.error("Error loading student data:", err)
+      setError(`Error al cargar los datos: ${err.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = async () => {
     await signOut()
@@ -51,12 +83,69 @@ export default function StudentDashboard() {
         return <Badge className="bg-green-100 text-green-800">Pagado</Badge>
       case "pending":
         return <Badge className="bg-yellow-100 text-yellow-800">Pendiente</Badge>
+      case "pending_approval":
+        return <Badge className="bg-orange-100 text-orange-800">Pendiente Aprobación</Badge>
       case "overdue":
         return <Badge className="bg-red-100 text-red-800">Vencido</Badge>
+      case "rejected":
+        return <Badge className="bg-red-100 text-red-800">Rechazado</Badge>
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
   }
+
+  const getNextPayment = () => {
+    const pendingFees = fees.filter((f) => f.status === "pending")
+    if (pendingFees.length === 0) return null
+
+    // Ordenar por fecha de vencimiento y tomar la más próxima
+    const sortedFees = pendingFees.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+    return sortedFees[0]
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Cargando datos del estudiante...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <p className="text-red-800 mb-4">{error}</p>
+            <div className="space-y-2">
+              <Button onClick={loadStudentData} variant="outline" className="w-full bg-transparent">
+                Reintentar
+              </Button>
+              <Button onClick={() => router.push("/login")} className="w-full">
+                Volver al Login
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!studentData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">No se pudieron cargar los datos del estudiante</p>
+          <Button onClick={() => router.push("/login")}>Volver al Login</Button>
+        </div>
+      </div>
+    )
+  }
+
+  const nextPayment = getNextPayment()
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -65,12 +154,10 @@ export default function StudentDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <User className="h-6 w-6 text-white" />
-              </div>
+              <LogoCompact width={50} height={50} />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Mi Cuenta</h1>
-                <p className="text-sm text-gray-500">Bienvenido, {studentData.name}</p>
+                <p className="text-sm text-gray-500">Que Viva El Fútbol - Bienvenido, {studentData.name}</p>
               </div>
             </div>
             <Button variant="outline" onClick={handleLogout}>
@@ -90,8 +177,8 @@ export default function StudentDashboard() {
               <User className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{studentData.status}</div>
-              <p className="text-xs text-muted-foreground">Categoría: {studentData.category}</p>
+              <div className="text-2xl font-bold capitalize">{studentData.status}</div>
+              <p className="text-xs text-muted-foreground">Año: {studentData.category}</p>
             </CardContent>
           </Card>
 
@@ -101,8 +188,17 @@ export default function StudentDashboard() {
               <CreditCard className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">$15.000</div>
-              <p className="text-xs text-muted-foreground">Vence: {studentData.nextPayment}</p>
+              {nextPayment ? (
+                <>
+                  <div className="text-2xl font-bold">${nextPayment.amount.toLocaleString()}</div>
+                  <p className="text-xs text-muted-foreground">Vence: {nextPayment.due_date}</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-green-600">Al día</div>
+                  <p className="text-xs text-muted-foreground">Sin pagos pendientes</p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -140,18 +236,64 @@ export default function StudentDashboard() {
                     <p className="text-lg">{studentData.name}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Categoría</label>
+                    <label className="text-sm font-medium text-gray-700">Email</label>
+                    <p className="text-lg">{studentData.email}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Año de Nacimiento</label>
                     <p className="text-lg">{studentData.category}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-700">Estado</label>
-                    <p className="text-lg">{studentData.status}</p>
+                    <p className="text-lg capitalize">{studentData.status}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Teléfono</label>
+                    <p className="text-lg">{studentData.phone || "No registrado"}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-700">Fecha de Inscripción</label>
-                    <p className="text-lg">15/01/2024</p>
+                    <p className="text-lg">
+                      {studentData.enrollmentDate
+                        ? new Date(studentData.enrollmentDate).toLocaleDateString()
+                        : "No registrada"}
+                    </p>
                   </div>
                 </div>
+
+                {studentData.address && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Dirección</label>
+                    <p className="text-lg">{studentData.address}</p>
+                  </div>
+                )}
+
+                <div className="border-t pt-4">
+                  <h3 className="text-lg font-semibold mb-2">Datos del Padre/Tutor</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Nombre</label>
+                      <p className="text-lg">{studentData.parentName}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Teléfono</label>
+                      <p className="text-lg">{studentData.parentPhone}</p>
+                    </div>
+                    {studentData.parentEmail && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Email</label>
+                        <p className="text-lg">{studentData.parentEmail}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {studentData.notes && (
+                  <div className="border-t pt-4">
+                    <label className="text-sm font-medium text-gray-700">Observaciones</label>
+                    <p className="text-lg">{studentData.notes}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -159,10 +301,18 @@ export default function StudentDashboard() {
           <TabsContent value="payments" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Estado de Pagos</h2>
-              <Button className="bg-green-600 hover:bg-green-700">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Pagar Cuota
-              </Button>
+              {nextPayment && (
+                <PaymentInterface
+                  fee={{
+                    id: nextPayment.id,
+                    month: nextPayment.month_year,
+                    amount: nextPayment.amount,
+                    dueDate: nextPayment.due_date,
+                    status: nextPayment.status,
+                  }}
+                  onPaymentComplete={loadStudentData}
+                />
+              )}
             </div>
 
             <Card>
@@ -172,59 +322,53 @@ export default function StudentDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {fees.map((fee) => (
-                    <div key={fee.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-4">
-                          <div>
-                            <p className="font-medium">{fee.month}</p>
-                            <p className="text-sm text-gray-500">Vence: {fee.dueDate}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold">${fee.amount.toLocaleString()}</p>
-                            {fee.paymentDate && <p className="text-sm text-gray-500">Pagado: {fee.paymentDate}</p>}
+                  {fees.length > 0 ? (
+                    fees.map((fee) => (
+                      <div key={fee.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-4">
+                            <div>
+                              <p className="font-medium">{fee.month_year}</p>
+                              <p className="text-sm text-gray-500">Vence: {fee.due_date}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold">${fee.amount.toLocaleString()}</p>
+                              {fee.payment_date && (
+                                <p className="text-sm text-gray-500">
+                                  Pagado: {new Date(fee.payment_date).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </div>
+                        <div className="flex items-center space-x-2">
+                          {getStatusBadge(fee.status)}
+                          {fee.status === "paid" && (
+                            <Button variant="outline" size="sm">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {fee.status === "pending" && (
+                            <PaymentInterface
+                              fee={{
+                                id: fee.id,
+                                month: fee.month_year,
+                                amount: fee.amount,
+                                dueDate: fee.due_date,
+                                status: fee.status,
+                              }}
+                              onPaymentComplete={loadStudentData}
+                            />
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {getStatusBadge(fee.status)}
-                        {fee.status === "paid" && (
-                          <Button variant="outline" size="sm">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {fee.status === "pending" && (
-                          <PaymentInterface
-                            fee={{
-                              id: fee.id.toString(),
-                              month: fee.month,
-                              amount: fee.amount,
-                              dueDate: fee.dueDate,
-                              status: fee.status,
-                            }}
-                            onPaymentComplete={() => {
-                              // Reload fees or update state
-                              console.log("Payment completed")
-                            }}
-                          />
-                        )}
-                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <CreditCard className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No hay cuotas registradas</p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Subir Comprobante</CardTitle>
-                <CardDescription>Si pagaste por transferencia o efectivo, sube tu comprobante aquí</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-600 mb-4">Arrastra tu comprobante aquí o haz clic para seleccionar</p>
-                  <Button variant="outline">Seleccionar Archivo</Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -234,24 +378,16 @@ export default function StudentDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle>Noticias y Comunicados</CardTitle>
-                <CardDescription>Últimas novedades de la escuela</CardDescription>
+                <CardDescription>Últimas novedades de Que Viva El Fútbol - Profe Beto</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="border-l-4 border-blue-500 pl-4 py-2">
-                    <h3 className="font-semibold">Entrenamiento Suspendido</h3>
+                    <h3 className="font-semibold">Sistema Inicializado</h3>
                     <p className="text-sm text-gray-600 mb-2">
-                      El entrenamiento del viernes 9 de febrero queda suspendido por lluvia.
+                      El sistema ha sido configurado correctamente. Ya puedes gestionar tus pagos y ver tu información.
                     </p>
-                    <p className="text-xs text-gray-500">Publicado hace 2 horas</p>
-                  </div>
-
-                  <div className="border-l-4 border-green-500 pl-4 py-2">
-                    <h3 className="font-semibold">Torneo Interno</h3>
-                    <p className="text-sm text-gray-600 mb-2">
-                      Se realizará un torneo interno el próximo sábado. ¡No faltes!
-                    </p>
-                    <p className="text-xs text-gray-500">Publicado hace 1 día</p>
+                    <p className="text-xs text-gray-500">Sistema</p>
                   </div>
                 </div>
               </CardContent>

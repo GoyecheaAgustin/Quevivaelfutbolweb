@@ -1,18 +1,84 @@
 "use client"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, Calendar, FileText, LogOut } from "lucide-react"
-import { signOut } from "@/lib/auth"
+import { Users, Calendar, FileText, LogOut, Loader2 } from "lucide-react"
+import { signOut, getCurrentUser } from "@/lib/auth"
 import { useRouter } from "next/navigation"
 import AttendanceManagement from "@/components/attendance-management"
+import PaymentApproval from "@/components/payment-approval"
+import { getStudents, getAttendance } from "@/lib/database"
+import { useEffect, useState } from "react"
+// Cambiar la importación del logo
+import { LogoCompact } from "@/components/logo"
 
 export default function CoachDashboard() {
   const router = useRouter()
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  const [stats, setStats] = useState({
+    totalStudents: 0,
+    presentToday: 0,
+    attendanceRate: 0,
+  })
+
+  useEffect(() => {
+    loadUserAndStats()
+  }, [])
+
+  const loadUserAndStats = async () => {
+    try {
+      setLoading(true)
+
+      // Obtener usuario actual
+      const user = await getCurrentUser()
+      if (!user) {
+        router.push("/login")
+        return
+      }
+
+      if (user.role !== "coach") {
+        router.push("/dashboard")
+        return
+      }
+
+      setCurrentUser(user)
+
+      // Cargar estadísticas
+      const [studentsData, attendanceData] = await Promise.all([
+        getStudents(),
+        getAttendance(new Date().toISOString().split("T")[0]),
+      ])
+
+      const activeStudents = studentsData?.filter((s) => s.status === "active") || []
+      const todayAttendance = attendanceData || []
+      const presentCount = todayAttendance.filter((a) => a.present).length
+
+      setStats({
+        totalStudents: activeStudents.length,
+        presentToday: presentCount,
+        attendanceRate: activeStudents.length > 0 ? Math.round((presentCount / activeStudents.length) * 100) : 0,
+      })
+    } catch (error) {
+      console.error("Error loading data:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = async () => {
     await signOut()
     router.push("/login")
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
   }
 
   return (
@@ -22,12 +88,11 @@ export default function CoachDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
-              <div className="bg-purple-600 p-2 rounded-lg">
-                <Users className="h-6 w-6 text-white" />
-              </div>
+              {/* En el header, cambiar Logo por LogoCompact */}
+              <LogoCompact width={50} height={50} />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Panel del Entrenador</h1>
-                <p className="text-sm text-gray-500">Gestión de entrenamientos y asistencia</p>
+                <p className="text-sm text-gray-500">Que Viva El Fútbol - {currentUser?.email}</p>
               </div>
             </div>
             <Button variant="outline" onClick={handleLogout}>
@@ -47,7 +112,7 @@ export default function CoachDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">24</div>
+              <div className="text-2xl font-bold">{stats.totalStudents}</div>
               <p className="text-xs text-muted-foreground">En todas las categorías</p>
             </CardContent>
           </Card>
@@ -58,8 +123,10 @@ export default function CoachDashboard() {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">18/24</div>
-              <p className="text-xs text-muted-foreground">75% de asistencia</p>
+              <div className="text-2xl font-bold">
+                {stats.presentToday}/{stats.totalStudents}
+              </div>
+              <p className="text-xs text-muted-foreground">{stats.attendanceRate}% de asistencia</p>
             </CardContent>
           </Card>
 
@@ -70,21 +137,26 @@ export default function CoachDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">16:00</div>
-              <p className="text-xs text-muted-foreground">Sub-15 - Cancha 1</p>
+              <p className="text-xs text-muted-foreground">Entrenamiento general</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Main Content */}
         <Tabs defaultValue="attendance" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="attendance">Asistencia</TabsTrigger>
+            <TabsTrigger value="approvals">Aprobaciones</TabsTrigger>
             <TabsTrigger value="students">Estudiantes</TabsTrigger>
             <TabsTrigger value="notes">Observaciones</TabsTrigger>
           </TabsList>
 
           <TabsContent value="attendance" className="space-y-6">
             <AttendanceManagement />
+          </TabsContent>
+
+          <TabsContent value="approvals" className="space-y-6">
+            <PaymentApproval />
           </TabsContent>
 
           <TabsContent value="students" className="space-y-6">

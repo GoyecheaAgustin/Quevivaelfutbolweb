@@ -7,7 +7,11 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
+    domains: ['localhost', 'vusercontent.net'], // Asegúrate de que 'vusercontent.net' esté aquí
     unoptimized: true,
+  },
+  experimental: {
+    esmExternals: 'loose',
   },
 }
 

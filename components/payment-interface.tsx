@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -11,9 +13,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { CreditCard, Upload, QrCode } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { CreditCard, Upload, FileText, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface PaymentInterfaceProps {
   fee: {
@@ -27,55 +30,79 @@ interface PaymentInterfaceProps {
 }
 
 export default function PaymentInterface({ fee, onPaymentComplete }: PaymentInterfaceProps) {
-  const [paymentMethod, setPaymentMethod] = useState("")
   const [loading, setLoading] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploadSuccess, setUploadSuccess] = useState(false)
 
-  const handleMercadoPagoPayment = async () => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      // Validar tipo de archivo
+      const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "application/pdf"]
+      if (!allowedTypes.includes(file.type)) {
+        alert("Solo se permiten archivos JPG, PNG o PDF")
+        return
+      }
+
+      // Validar tamaño (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert("El archivo no puede ser mayor a 5MB")
+        return
+      }
+
+      setSelectedFile(file)
+    }
+  }
+
+  const handleUploadProof = async () => {
+    if (!selectedFile) {
+      alert("Debes seleccionar un archivo")
+      return
+    }
+
     setLoading(true)
     try {
-      // Simulación de integración con MercadoPago
-      console.log("Iniciando pago con MercadoPago:", fee)
-
-      // En producción, aquí harías la llamada a la API de MercadoPago
+      // Simular subida de archivo
+      // En producción, aquí subirías el archivo a un servicio como Vercel Blob o AWS S3
       await new Promise((resolve) => setTimeout(resolve, 2000))
 
-      alert("Pago procesado exitosamente con MercadoPago")
-      onPaymentComplete()
-      setIsDialogOpen(false)
+      // Simular actualización del estado del pago
+      console.log("Subiendo comprobante para:", fee.id)
+      console.log("Archivo:", selectedFile.name)
+
+      // Aquí actualizarías el estado del pago a 'pending_approval'
+      // await updateFee(fee.id, {
+      //   status: 'pending_approval',
+      //   payment_proof_filename: selectedFile.name
+      // })
+
+      setUploadSuccess(true)
+      setTimeout(() => {
+        onPaymentComplete()
+        setIsDialogOpen(false)
+        setUploadSuccess(false)
+        setSelectedFile(null)
+      }, 2000)
     } catch (error) {
-      console.error("Error processing payment:", error)
-      alert("Error al procesar el pago")
+      console.error("Error uploading proof:", error)
+      alert("Error al subir el comprobante")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleBankTransfer = () => {
-    // Mostrar datos bancarios
-    alert(`
-      Datos para transferencia bancaria:
-      
-      Banco: Banco Ejemplo
-      Cuenta: 1234567890
-      CBU: 0123456789012345678901
-      Titular: Escuela de Fútbol
-      Monto: $${fee.amount.toLocaleString()}
-      
-      Referencia: ${fee.id}
-    `)
-  }
-
-  const generateQRPayment = () => {
-    // Generar QR para pago
-    const qrData = {
-      amount: fee.amount,
-      reference: fee.id,
-      description: `Cuota ${fee.month}`,
+  const getBankInfo = () => {
+    return {
+      bank: "Banco Ejemplo",
+      account: "1234567890",
+      cbu: "0123456789012345678901",
+      alias: "FUTBOL.BETO.ESCUELA",
+      holder: "Escuela de Fútbol Profe Beto",
     }
-
-    alert(`QR generado para pago de $${fee.amount.toLocaleString()}`)
   }
+
+  const bankInfo = getBankInfo()
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -93,84 +120,94 @@ export default function PaymentInterface({ fee, onPaymentComplete }: PaymentInte
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div>
-            <Label>Método de Pago</Label>
-            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar método" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mercadopago">MercadoPago</SelectItem>
-                <SelectItem value="transfer">Transferencia Bancaria</SelectItem>
-                <SelectItem value="qr">Código QR</SelectItem>
-                <SelectItem value="cash">Efectivo</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="space-y-6">
+          {/* Información bancaria */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2 mb-4">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                  <h3 className="font-semibold">Datos para Transferencia</h3>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Banco:</span>
+                    <span className="font-medium">{bankInfo.bank}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Cuenta:</span>
+                    <span className="font-medium">{bankInfo.account}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">CBU:</span>
+                    <span className="font-medium font-mono text-xs">{bankInfo.cbu}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Alias:</span>
+                    <span className="font-medium">{bankInfo.alias}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Titular:</span>
+                    <span className="font-medium">{bankInfo.holder}</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="text-gray-600 font-semibold">Monto:</span>
+                    <span className="font-bold text-green-600">${fee.amount.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Subir comprobante */}
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Upload className="h-5 w-5 text-orange-600" />
+              <h3 className="font-semibold">Subir Comprobante</h3>
+            </div>
+
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Después de realizar la transferencia, sube el comprobante para que sea aprobado por el administrador.
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-3">
+              <Label htmlFor="proof">Comprobante de Pago</Label>
+              <Input
+                id="proof"
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf"
+                onChange={handleFileSelect}
+                disabled={loading}
+              />
+              {selectedFile && <p className="text-sm text-gray-600">Archivo seleccionado: {selectedFile.name}</p>}
+            </div>
+
+            {uploadSuccess && (
+              <Alert className="border-green-200 bg-green-50">
+                <AlertDescription className="text-green-800">
+                  ¡Comprobante subido exitosamente! Tu pago está pendiente de aprobación.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              onClick={handleUploadProof}
+              disabled={loading || !selectedFile || uploadSuccess}
+              className="w-full bg-orange-600 hover:bg-orange-700"
+            >
+              {loading ? "Subiendo comprobante..." : uploadSuccess ? "¡Comprobante subido!" : "Subir Comprobante"}
+            </Button>
           </div>
 
-          {paymentMethod === "mercadopago" && (
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-600 mb-4">
-                  Serás redirigido a MercadoPago para completar el pago de forma segura.
-                </p>
-                <Button
-                  onClick={handleMercadoPagoPayment}
-                  disabled={loading}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                >
-                  {loading ? "Procesando..." : "Pagar con MercadoPago"}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {paymentMethod === "transfer" && (
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-600 mb-4">Realiza la transferencia y luego sube el comprobante.</p>
-                <div className="space-y-2">
-                  <Button onClick={handleBankTransfer} variant="outline" className="w-full bg-transparent">
-                    Ver Datos Bancarios
-                  </Button>
-                  <Button variant="outline" className="w-full bg-transparent">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Subir Comprobante
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {paymentMethod === "qr" && (
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-600 mb-4">Escanea el código QR con tu app de banco.</p>
-                <Button onClick={generateQRPayment} variant="outline" className="w-full bg-transparent">
-                  <QrCode className="h-4 w-4 mr-2" />
-                  Generar QR de Pago
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {paymentMethod === "cash" && (
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-600 mb-4">Acércate a la escuela para realizar el pago en efectivo.</p>
-                <div className="bg-yellow-50 p-3 rounded-lg">
-                  <p className="text-sm text-yellow-800">
-                    <strong>Horarios de atención:</strong>
-                    <br />
-                    Lunes a Viernes: 16:00 - 20:00
-                    <br />
-                    Sábados: 9:00 - 13:00
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <div className="text-xs text-gray-500 space-y-1">
+            <p>• Formatos aceptados: JPG, PNG, PDF</p>
+            <p>• Tamaño máximo: 5MB</p>
+            <p>• El pago será aprobado en 24-48 horas</p>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
