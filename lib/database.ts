@@ -1,46 +1,13 @@
 import { supabase } from "./supabase"
-import {
-  mockUsers,
-  mockFees,
-  mockAttendance,
-  mockNews,
-  updateMockUsers,
-  updateMockFees,
-  updateMockAttendance,
-  updateMockNews,
-} from "./mock-data"
 
-// Flag para usar datos mock en desarrollo
-const USE_MOCK_DATA = false
-
-// Funciones para estudiantes
+// Funciones para usuarios/estudiantes
 export async function getUsers() {
-  if (USE_MOCK_DATA) {
-    // Simular delay de red
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    return mockUsers
-  }
-
   try {
-    // Intentar primero con JOIN
-    const { data, error } = await supabase
-      .from("users")
-      .select(`
-        *,
-        users!inner(email, role)
-      `)
-      .order("created_at", { ascending: false })
+    const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Error with JOIN query:", error)
-      // Si falla el JOIN, intentar sin él
-      const { data: simpleData, error: simpleError } = await supabase
-        .from("users")
-        .select("*")
-        .order("created_at", { ascending: false })
-
-      if (simpleError) throw simpleError
-      return simpleData
+      console.error("Error loading users:", error)
+      throw error
     }
 
     return data
@@ -50,18 +17,16 @@ export async function getUsers() {
   }
 }
 
-export async function getUserByUserId(userId: string) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    return mockUsers.find((s) => s.user_id === userId)
-  }
-
+export async function getUserByUserId(authId: string) {
   try {
-    const { data, error } = await supabase.from("users").select("*").eq("id", userId).single()
+    const { data, error } = await supabase.from("users").select("*").eq("auth_id", authId).single()
 
-    console.log("🔍 Buscando estudiante con auth_id:", userId)
+    if (error && error.code !== "PGRST116") {
+      // PGRST116 means "No rows found", which is not an error for maybeSingle/single if expecting null
+      console.error("Error finding user:", error)
+      throw error
+    }
 
-    if (error && error.code !== "PGRST116") throw error
     return data
   } catch (error) {
     console.error("Error in getUserByUserId:", error)
@@ -69,76 +34,77 @@ export async function getUserByUserId(userId: string) {
   }
 }
 
-export async function createUser(studentData: any) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    const newUser = {
-      ...studentData,
-      id: `student-${Date.now()}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      users: { email: `${studentData.first_name.toLowerCase()}@escuela.com`, role: "student" },
-      fees: [],
-    }
-    updateMockUsers([...mockUsers, newUser])
-    return newUser
-  }
+export async function createUser(userData: any) {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .insert([
+        {
+          ...userData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single()
 
-  const { data, error } = await supabase.from("users").insert([studentData]).select()
-  if (error) throw error
-  return data[0]
+    if (error) {
+      console.error("Error creating user:", error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in createUser:", error)
+    throw error
+  }
 }
 
-export async function updateUser(id: string, studentData: any) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    const index = mockUsers.findIndex((s) => s.id === id)
-    if (index !== -1) {
-      const updatedUsers = [...mockUsers]
-      updatedUsers[index] = { ...updatedUsers[index], ...studentData, updated_at: new Date().toISOString() }
-      updateMockUsers(updatedUsers)
-      return updatedUsers[index]
-    }
-    throw new Error("User not found")
-  }
+export async function updateUser(id: string, userData: any) {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .update({
+        ...userData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single()
 
-  const { data, error } = await supabase.from("users").update(studentData).eq("id", id).select()
-  if (error) throw error
-  return data[0]
+    if (error) {
+      console.error("Error updating user:", error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in updateUser:", error)
+    throw error
+  }
 }
 
 export async function deleteUser(id: string) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    const index = mockUsers.findIndex((s) => s.id === id)
-    if (index !== -1) {
-      const updatedUsers = mockUsers.filter((s) => s.id !== id)
-      updateMockUsers(updatedUsers)
-      return
-    }
-    throw new Error("User not found")
-  }
+  try {
+    const { error } = await supabase.from("users").delete().eq("id", id)
 
-  const { error } = await supabase.from("users").delete().eq("id", id)
-  if (error) throw error
+    if (error) {
+      console.error("Error deleting user:", error)
+      throw error
+    }
+  } catch (error) {
+    console.error("Error in deleteUser:", error)
+    throw error
+  }
 }
 
 // Funciones para cuotas
 export async function getFees(studentId?: string) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    let filteredFees = mockFees
-    if (studentId) {
-      filteredFees = mockFees.filter((fee) => fee.student_id === studentId)
-    }
-    return filteredFees
-  }
-
   try {
     let query = supabase.from("fees").select(`
-      *,
-      users!inner(first_name, last_name)
-    `)
+        *,
+        students!inner(first_name, last_name, email)
+      `) // Asumiendo que 'students' tiene email, o ajusta a 'users' si es el caso
 
     if (studentId) {
       query = query.eq("student_id", studentId)
@@ -147,7 +113,7 @@ export async function getFees(studentId?: string) {
     const { data, error } = await query.order("due_date", { ascending: false })
 
     if (error) {
-      console.error("Error with fees JOIN query:", error)
+      console.error("Error loading fees:", error)
       // Si falla el JOIN, intentar sin él
       let simpleQuery = supabase.from("fees").select("*")
       if (studentId) {
@@ -166,74 +132,62 @@ export async function getFees(studentId?: string) {
 }
 
 export async function createFee(feeData: any) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    const student = mockUsers.find((s) => s.id === feeData.student_id)
-    const newFee = {
-      ...feeData,
-      id: `fee-${Date.now()}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      users: student ? { first_name: student.first_name, last_name: student.last_name } : null,
+  try {
+    const { data, error } = await supabase
+      .from("fees")
+      .insert([
+        {
+          ...feeData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Error creating fee:", error)
+      throw error
     }
-    updateMockFees([...mockFees, newFee])
-    return newFee
+
+    return data
+  } catch (error) {
+    console.error("Error in createFee:", error)
+    throw error
   }
-
-  // Si no se pasa due_date, lo generamos automáticamente (día 10 del mes)
-  const dueDate = feeData.due_date
-    ? feeData.due_date
-    : new Date(feeData.year, feeData.month - 1, 10).toISOString().split("T")[0]
-
-  const { data, error } = await supabase
-    .from("fees")
-    .insert([
-      {
-        ...feeData,
-        due_date: dueDate,
-      },
-    ])
-    .select()
-
-  if (error) throw error
-  return data[0]
 }
 
-
 export async function updateFee(id: string, feeData: any) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    const index = mockFees.findIndex((f) => f.id === id)
-    if (index !== -1) {
-      const updatedFees = [...mockFees]
-      updatedFees[index] = { ...updatedFees[index], ...feeData, updated_at: new Date().toISOString() }
-      updateMockFees(updatedFees)
-      return updatedFees[index]
-    }
-    throw new Error("Fee not found")
-  }
+  try {
+    const { data, error } = await supabase
+      .from("fees")
+      .update({
+        ...feeData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single()
 
-  const { data, error } = await supabase.from("fees").update(feeData).eq("id", id).select()
-  if (error) throw error
-  return data[0]
+    if (error) {
+      console.error("Error updating fee:", error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in updateFee:", error)
+    throw error
+  }
 }
 
 // Funciones para asistencia
 export async function getAttendance(date?: string) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    let filteredAttendance = mockAttendance
-    if (date) {
-      filteredAttendance = mockAttendance.filter((att) => att.date === date)
-    }
-    return filteredAttendance
-  }
-
   try {
     let query = supabase.from("attendance").select(`
-      *,
-      users!inner(first_name, last_name, category)
-    `)
+        *,
+        students!inner(first_name, last_name, category)
+      `)
 
     if (date) {
       query = query.eq("date", date)
@@ -242,7 +196,7 @@ export async function getAttendance(date?: string) {
     const { data, error } = await query.order("date", { ascending: false })
 
     if (error) {
-      console.error("Error with attendance JOIN query:", error)
+      console.error("Error loading attendance:", error)
       // Si falla el JOIN, intentar sin él
       let simpleQuery = supabase.from("attendance").select("*")
       if (date) {
@@ -261,62 +215,42 @@ export async function getAttendance(date?: string) {
 }
 
 export async function markAttendance(attendanceData: any[]) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    const updatedAttendance = [...mockAttendance]
-    attendanceData.forEach((newRecord) => {
-      const existingIndex = updatedAttendance.findIndex(
-        (att) => att.student_id === newRecord.student_id && att.date === newRecord.date,
+  try {
+    const { data, error } = await supabase
+      .from("attendance")
+      .upsert(
+        attendanceData.map((record) => ({
+          ...record,
+          updated_at: new Date().toISOString(),
+        })),
       )
+      .select()
 
-      const student = mockUsers.find((s) => s.id === newRecord.student_id)
-      const recordWithUser = {
-        ...newRecord,
-        id: existingIndex !== -1 ? updatedAttendance[existingIndex].id : `att-${Date.now()}-${newRecord.student_id}`,
-        created_at: existingIndex !== -1 ? updatedAttendance[existingIndex].created_at : new Date().toISOString(),
-        users: student
-          ? {
-              first_name: student.first_name,
-              last_name: student.last_name,
-              category: student.category,
-            }
-          : null,
-      }
+    if (error) {
+      console.error("Error marking attendance:", error)
+      throw error
+    }
 
-      if (existingIndex !== -1) {
-        updatedAttendance[existingIndex] = recordWithUser
-      } else {
-        updatedAttendance.push(recordWithUser)
-      }
-    })
-    updateMockAttendance(updatedAttendance)
-    return attendanceData
+    return data
+  } catch (error) {
+    console.error("Error in markAttendance:", error)
+    throw error
   }
-
-  const { data, error } = await supabase.from("attendance").upsert(attendanceData).select()
-  if (error) throw error
-  return data
 }
 
 // Funciones para noticias
 export async function getNews() {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    return mockNews
-  }
-
   try {
     const { data, error } = await supabase
       .from("news")
       .select(`
         *,
-        users!inner(email)
+        users!inner(email, first_name, last_name)
       `)
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Error with news JOIN query:", error)
+      console.error("Error loading news:", error)
       // Si falla el JOIN, intentar sin él
       const { data: simpleData, error: simpleError } = await supabase
         .from("news")
@@ -334,54 +268,160 @@ export async function getNews() {
 }
 
 export async function createNews(newsData: any) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    const newNews = {
-      ...newsData,
-      id: `news-${Date.now()}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      users: { email: "admin@escuela.com" },
-    }
-    updateMockNews([newNews, ...mockNews])
-    return newNews
-  }
+  try {
+    const { data, error } = await supabase
+      .from("news")
+      .insert([
+        {
+          ...newsData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single()
 
-  const { data, error } = await supabase.from("news").insert([newsData]).select()
-  if (error) throw error
-  return data[0]
+    if (error) {
+      console.error("Error creating news:", error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in createNews:", error)
+    throw error
+  }
 }
 
 export async function updateNews(id: string, newsData: any) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    const index = mockNews.findIndex((n) => n.id === id)
-    if (index !== -1) {
-      const updatedNews = [...mockNews]
-      updatedNews[index] = { ...updatedNews[index], ...newsData, updated_at: new Date().toISOString() }
-      updateMockNews(updatedNews)
-      return updatedNews[index]
-    }
-    throw new Error("News not found")
-  }
+  try {
+    const { data, error } = await supabase
+      .from("news")
+      .update({
+        ...newsData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single()
 
-  const { data, error } = await supabase.from("news").update(newsData).eq("id", id).select()
-  if (error) throw error
-  return data[0]
+    if (error) {
+      console.error("Error updating news:", error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in updateNews:", error)
+    throw error
+  }
 }
 
 export async function deleteNews(id: string) {
-  if (USE_MOCK_DATA) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    const index = mockNews.findIndex((n) => n.id === id)
-    if (index !== -1) {
-      const updatedNews = mockNews.filter((n) => n.id !== id)
-      updateMockNews(updatedNews)
-      return
-    }
-    throw new Error("News not found")
-  }
+  try {
+    const { error } = await supabase.from("news").delete().eq("id", id)
 
-  const { error } = await supabase.from("news").delete().eq("id", id)
-  if (error) throw error
+    if (error) {
+      console.error("Error deleting news:", error)
+      throw error
+    }
+  } catch (error) {
+    console.error("Error in deleteNews:", error)
+    throw error
+  }
+}
+
+// Funciones adicionales para estadísticas
+export async function getStudentStats(studentId: string) {
+  try {
+    // Asumiendo que studentId es el ID de la tabla 'students'
+    const [fees, attendance] = await Promise.all([getFees(studentId), getAttendance()])
+
+    const studentAttendance = attendance?.filter((a) => a.student_id === studentId) || []
+    const totalSessions = studentAttendance.length
+    const presentSessions = studentAttendance.filter((a) => a.present).length
+    const attendanceRate = totalSessions > 0 ? (presentSessions / totalSessions) * 100 : 0
+
+    const totalFees = fees?.length || 0
+    const paidFees = fees?.filter((f) => f.status === "paid").length || 0
+    const pendingFees = fees?.filter((f) => f.status === "pending").length || 0
+    const paymentRate = totalFees > 0 ? (paidFees / totalFees) * 100 : 0
+
+    return {
+      attendance: {
+        total: totalSessions,
+        present: presentSessions,
+        rate: Math.round(attendanceRate),
+      },
+      payments: {
+        total: totalFees,
+        paid: paidFees,
+        pending: pendingFees,
+        rate: Math.round(paymentRate),
+      },
+    }
+  } catch (error) {
+    console.error("Error getting student stats:", error)
+    throw error
+  }
+}
+
+export async function getGeneralStats() {
+  try {
+    const [users, fees, attendance] = await Promise.all([getUsers(), getFees(), getAttendance()])
+
+    const activeUsers = users?.filter((u) => u.status === "active").length || 0
+    const totalUsers = users?.length || 0
+
+    const paidFees = fees?.filter((f) => f.status === "paid").length || 0
+    const pendingFees = fees?.filter((f) => f.status === "pending").length || 0
+    const totalRevenue = fees?.filter((f) => f.status === "paid").reduce((sum, f) => sum + f.amount, 0) || 0
+
+    const todayAttendance = attendance?.filter((a) => a.date === new Date().toISOString().split("T")[0]) || []
+    const presentToday = todayAttendance.filter((a) => a.present).length
+    const totalToday = todayAttendance.length
+
+    return {
+      users: {
+        total: totalUsers,
+        active: activeUsers,
+      },
+      payments: {
+        paid: paidFees,
+        pending: pendingFees,
+        revenue: totalRevenue,
+      },
+      attendance: {
+        today: {
+          present: presentToday,
+          total: totalToday,
+          rate: totalToday > 0 ? Math.round((presentToday / totalToday) * 100) : 0,
+        },
+      },
+    }
+  } catch (error) {
+    console.error("Error getting general stats:", error)
+    throw error
+  }
+}
+
+// Función para buscar usuarios
+export async function searchUsers(query: string) {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%`)
+      .limit(20)
+
+    if (error) {
+      console.error("Error searching users:", error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in searchUsers:", error)
+    throw error
+  }
 }

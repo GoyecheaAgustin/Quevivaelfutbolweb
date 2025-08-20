@@ -3,50 +3,54 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DollarSign, Download, Mail, CreditCard, Plus } from "lucide-react"
-import { getFees, createFee, updateFee, getusers } from "@/lib/database"
-import { generatePaymentReceipt, downloadPDF } from "@/lib/pdf-generator"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, DollarSign, Edit, Trash, FileText, Mail, Save, XCircle } from "lucide-react"
+import { getFees, createFee, updateFee, deleteFee, getUsers } from "@/lib/database"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { sendPaymentReminder } from "@/lib/notifications"
+import { generatePaymentReceipt, downloadPdf } from "@/lib/pdf-generator"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Fee {
   id: string
   student_id: string
   amount: number
+  currency: string
   due_date: string
-  month_year: string
+  payment_date: string | null
   status: string
-  payment_method?: string
-  payment_date?: string
-  users?: { first_name: string; last_name: string }
+  period: string
+  notes: string | null
+  receipt_url: string | null
+  users?: { first_name: string; last_name: string; email: string } // Para el JOIN
+}
+
+interface Student {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
 }
 
 export default function PaymentManagement() {
   const [fees, setFees] = useState<Fee[]>([])
-  const [users, setusers] = useState<any[]>([])
+  const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedStatus, setSelectedStatus] = useState("all")
-
-  const [formData, setFormData] = useState({
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [editingFee, setEditingFee] = useState<Fee | null>(null)
+  const [newFeeData, setNewFeeData] = useState({
     student_id: "",
     amount: "",
     due_date: "",
-    month_year: "",
+    period: "",
+    status: "pending",
   })
 
   useEffect(() => {
@@ -54,350 +58,374 @@ export default function PaymentManagement() {
   }, [])
 
   const loadData = async () => {
-    try {
-      const [feesData, usersData] = await Promise.all([getFees(), getusers()])
-      setFees(feesData || [])
-      setusers(usersData || [])
-    } catch (error) {
-      console.error("Error loading data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleCreateFee = async (e: React.FormEvent) => {
-    e.preventDefault()
     setLoading(true)
-
+    setError(null)
+    setSuccess(null)
     try {
-      await createFee({
-        ...formData,
-        amount: Number.parseFloat(formData.amount),
-        status: "pending",
-      })
+      const allFees = await getFees()
+      setFees(allFees || [])
 
-      await loadData()
-      setIsDialogOpen(false)
-      setFormData({
-        student_id: "",
-        amount: "",
-        due_date: "",
-        month_year: "",
-      })
-    } catch (error) {
-      console.error("Error creating fee:", error)
+      const allUsers = await getUsers()
+      const studentUsers = allUsers.filter((u: any) => u.role === "student")
+      setStudents(studentUsers)
+    } catch (err: any) {
+      console.error("Error loading payment data:", err)
+      setError(err.message || "Error al cargar los datos de pagos.")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleMarkAsPaid = async (feeId: string, paymentMethod = "manual") => {
-    try {
-      await updateFee(feeId, {
-        status: "paid",
-        payment_method: paymentMethod,
-        payment_date: new Date().toISOString(),
-      })
-      await loadData()
-    } catch (error) {
-      console.error("Error marking as paid:", error)
-    }
-  }
+  const handleCreateOrUpdateFee = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
 
-  const handleDownloadReceipt = async (fee: Fee) => {
+    const parsedAmount = Number.parseFloat(newFeeData.amount)
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setError("Por favor, ingresa un monto válido.")
+      setSaving(false)
+      return
+    }
+
     try {
-      const receiptData = {
-        id: fee.id,
-        studentName: `${fee.users?.first_name} ${fee.users?.last_name}`,
-        amount: fee.amount,
-        date: fee.payment_date,
-        month: fee.month_year,
+      const feeToSave = {
+        student_id: newFeeData.student_id,
+        amount: parsedAmount,
+        currency: "USD", // Moneda por defecto
+        due_date: newFeeData.due_date,
+        period: newFeeData.period,
+        status: newFeeData.status,
+        payment_date: newFeeData.status === "paid" ? new Date().toISOString().split("T")[0] : null,
       }
 
-      const pdfBlob = await generatePaymentReceipt(receiptData)
-      downloadPDF(pdfBlob, `recibo-${fee.month_year}-${fee.users?.first_name}.pdf`)
-    } catch (error) {
-      console.error("Error generating receipt:", error)
+      if (editingFee) {
+        await updateFee(editingFee.id, feeToSave)
+        setSuccess("Cuota actualizada exitosamente.")
+      } else {
+        await createFee(feeToSave)
+        setSuccess("Cuota creada exitosamente.")
+      }
+      resetForm()
+      await loadData()
+    } catch (err: any) {
+      console.error("Error saving fee:", err)
+      setError(err.message || "Error al guardar la cuota.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteFee = async (id: string) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar esta cuota?")) return
+
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await deleteFee(id)
+      setSuccess("Cuota eliminada exitosamente.")
+      await loadData()
+    } catch (err: any) {
+      console.error("Error deleting fee:", err)
+      setError(err.message || "Error al eliminar la cuota.")
+    } finally {
+      setSaving(false)
     }
   }
 
   const handleSendReminder = async (fee: Fee) => {
+    setSaving(true) // Usar saving para indicar que se está enviando
+    setError(null)
+    setSuccess(null)
     try {
-      const studentName = `${fee.users?.first_name} ${fee.users?.last_name}`
+      const student = students.find((s) => s.id === fee.student_id)
+      if (!student || !student.email) {
+        setError("No se encontró el email del estudiante para enviar el recordatorio.")
+        setSaving(false)
+        return
+      }
       await sendPaymentReminder(
-        "student@example.com", // En producción obtener del estudiante
-        studentName,
+        `${student.first_name} ${student.last_name}`,
+        student.email,
         fee.amount,
-        fee.due_date,
+        new Date(fee.due_date).toLocaleDateString(),
       )
-      alert("Recordatorio enviado exitosamente")
-    } catch (error) {
-      console.error("Error sending reminder:", error)
+      setSuccess(`Recordatorio enviado a ${student.first_name} ${student.last_name}.`)
+    } catch (err: any) {
+      console.error("Error sending reminder:", err)
+      setError(err.message || "Error al enviar el recordatorio.")
+    } finally {
+      setSaving(false)
     }
   }
 
-  const generateMonthlyFees = async () => {
-    const currentDate = new Date()
-    const monthYear = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`
-
+  const handleDownloadReceipt = async (fee: Fee) => {
+    if (!fee.payment_date || fee.status !== "paid") {
+      setError("Solo se pueden descargar recibos de cuotas pagadas.")
+      return
+    }
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
     try {
-      const activeusers = users.filter((s) => s.status === "active")
-
-      for (const student of activeusers) {
-        await createFee({
-          student_id: student.id,
-          amount: 15000, // Monto base
-          due_date: `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-15`,
-          month_year: monthYear,
-          status: "pending",
-        })
+      const student = students.find((s) => s.id === fee.student_id)
+      if (!student) {
+        setError("No se encontró el estudiante para generar el recibo.")
+        setSaving(false)
+        return
       }
 
-      await loadData()
-      alert(`Se generaron ${activeusers.length} cuotas para ${monthYear}`)
-    } catch (error) {
-      console.error("Error generating monthly fees:", error)
+      const receiptData = {
+        receiptId: fee.id.substring(0, 8),
+        studentName: `${student.first_name} ${student.last_name}`,
+        studentId: student.id,
+        amount: fee.amount,
+        currency: fee.currency,
+        paymentDate: new Date(fee.payment_date).toLocaleDateString(),
+        dueDate: new Date(fee.due_date).toLocaleDateString(),
+        period: fee.period,
+        status: "Pagado",
+        notes: fee.notes || "",
+        schoolName: "Que Viva El Fútbol",
+        schoolAddress: "Calle Falsa 123, Ciudad",
+        schoolPhone: "+123456789",
+        schoolEmail: "info@quevivaelfutbol.com",
+      }
+      const receiptBlob = await generatePaymentReceipt(receiptData)
+      await downloadPdf(receiptBlob, `recibo-${receiptData.receiptId}.pdf`)
+      setSuccess("Recibo descargado exitosamente.")
+    } catch (err: any) {
+      console.error("Error downloading receipt:", err)
+      setError(err.message || "Error al descargar el recibo.")
+    } finally {
+      setSaving(false)
     }
   }
 
-  const filteredFees = fees.filter((fee) => {
-    if (selectedStatus === "all") return true
-    return fee.status === selectedStatus
-  })
+  const startEditing = (fee: Fee) => {
+    setEditingFee(fee)
+    setNewFeeData({
+      student_id: fee.student_id,
+      amount: fee.amount.toString(),
+      due_date: fee.due_date,
+      period: fee.period,
+      status: fee.status,
+    })
+    setError(null)
+    setSuccess(null)
+  }
 
-  const getStatusBadge = (status: string) => {
+  const resetForm = () => {
+    setEditingFee(null)
+    setNewFeeData({
+      student_id: "",
+      amount: "",
+      due_date: "",
+      period: "",
+      status: "pending",
+    })
+    setError(null)
+    setSuccess(null)
+  }
+
+  const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case "paid":
-        return <Badge className="bg-green-100 text-green-800">Pagado</Badge>
+        return "default"
       case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-800">Pendiente</Badge>
+        return "secondary"
       case "overdue":
-        return <Badge className="bg-red-100 text-red-800">Vencido</Badge>
+        return "destructive"
       default:
-        return <Badge variant="secondary">{status}</Badge>
+        return "outline"
     }
   }
 
-  const totalPending = fees.filter((f) => f.status === "pending").reduce((sum, f) => sum + f.amount, 0)
-  const totalPaid = fees.filter((f) => f.status === "paid").reduce((sum, f) => sum + f.amount, 0)
-
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Gestión de Pagos</h2>
-        <div className="flex space-x-2">
-          <Button onClick={generateMonthlyFees} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Generar Cuotas Mensuales
-          </Button>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-green-600 hover:bg-green-700">
-                <DollarSign className="h-4 w-4 mr-2" />
-                Nueva Cuota
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Crear Nueva Cuota</DialogTitle>
-                <DialogDescription>Crea una cuota individual para un estudiante</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreateFee} className="space-y-4">
-                <div>
-                  <Label htmlFor="student_id">Estudiante</Label>
-                  <Select
-                    value={formData.student_id}
-                    onValueChange={(value) => setFormData({ ...formData, student_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar estudiante" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((student) => (
-                        <SelectItem key={student.id} value={student.id}>
-                          {student.first_name} {student.last_name} - {student.category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+    <Card className="w-full max-w-5xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <DollarSign className="h-6 w-6" /> Gestión de Pagos
+        </CardTitle>
+        <CardDescription>
+          Administra las cuotas de los estudiantes, envía recordatorios y genera recibos.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert className="border-green-200 bg-green-50">
+            <AlertDescription className="text-green-800">{success}</AlertDescription>
+          </Alert>
+        )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="amount">Monto</Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      value={formData.amount}
-                      onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                      placeholder="15000"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="due_date">Fecha de Vencimiento</Label>
-                    <Input
-                      id="due_date"
-                      type="date"
-                      value={formData.due_date}
-                      onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="month_year">Mes/Año</Label>
-                  <Input
-                    id="month_year"
-                    value={formData.month_year}
-                    onChange={(e) => setFormData({ ...formData, month_year: e.target.value })}
-                    placeholder="2024-02"
-                    required
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? "Creando..." : "Crear Cuota"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Pendiente</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalPending.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              {fees.filter((f) => f.status === "pending").length} cuotas pendientes
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Recaudado</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalPaid.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              {fees.filter((f) => f.status === "paid").length} cuotas pagadas
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasa de Cobro</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {fees.length > 0 ? Math.round((fees.filter((f) => f.status === "paid").length / fees.length) * 100) : 0}%
-            </div>
-            <p className="text-xs text-muted-foreground">Pagos completados</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filtros */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtros</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex space-x-4">
-            <div>
-              <Label htmlFor="status">Estado</Label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
+        <form onSubmit={handleCreateOrUpdateFee} className="space-y-4 p-4 border rounded-lg">
+          <h3 className="text-lg font-semibold">{editingFee ? "Editar Cuota" : "Crear Nueva Cuota"}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="student_id">Estudiante</Label>
+              <Select
+                value={newFeeData.student_id}
+                onValueChange={(value) => setNewFeeData((prev) => ({ ...prev, student_id: value }))}
+                disabled={saving || !!editingFee} // No permitir cambiar estudiante al editar
+              >
+                <SelectTrigger id="student_id">
+                  <SelectValue placeholder="Selecciona un estudiante" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="pending">Pendientes</SelectItem>
-                  <SelectItem value="paid">Pagados</SelectItem>
-                  <SelectItem value="overdue">Vencidos</SelectItem>
+                  {students.map((student) => (
+                    <SelectItem key={student.id} value={student.id}>
+                      {student.first_name} {student.last_name} ({student.email})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="amount">Monto</Label>
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                value={newFeeData.amount}
+                onChange={(e) => setNewFeeData((prev) => ({ ...prev, amount: e.target.value }))}
+                required
+                disabled={saving}
+              />
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="due_date">Fecha de Vencimiento</Label>
+              <Input
+                id="due_date"
+                type="date"
+                value={newFeeData.due_date}
+                onChange={(e) => setNewFeeData((prev) => ({ ...prev, due_date: e.target.value }))}
+                required
+                disabled={saving}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="period">Período</Label>
+              <Input
+                id="period"
+                value={newFeeData.period}
+                onChange={(e) => setNewFeeData((prev) => ({ ...prev, period: e.target.value }))}
+                placeholder="Ej: Julio 2024"
+                required
+                disabled={saving}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="status">Estado</Label>
+            <Select
+              value={newFeeData.status}
+              onValueChange={(value) => setNewFeeData((prev) => ({ ...prev, status: value }))}
+              disabled={saving}
+            >
+              <SelectTrigger id="status">
+                <SelectValue placeholder="Selecciona un estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pendiente</SelectItem>
+                <SelectItem value="paid">Pagado</SelectItem>
+                <SelectItem value="overdue">Vencido</SelectItem>
+                <SelectItem value="waived">Exonerado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" /> {editingFee ? "Actualizar Cuota" : "Crear Cuota"}
+                </>
+              )}
+            </Button>
+            {editingFee && (
+              <Button type="button" variant="outline" onClick={resetForm} disabled={saving}>
+                <XCircle className="mr-2 h-4 w-4" /> Cancelar
+              </Button>
+            )}
+          </div>
+        </form>
 
-      {/* Lista de cuotas */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Cuotas ({filteredFees.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <h3 className="text-lg font-semibold mt-8">Historial de Cuotas</h3>
+        {loading ? (
+          <div className="flex items-center justify-center h-48">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <p className="ml-4 text-lg text-blue-800">Cargando cuotas...</p>
+          </div>
+        ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Estudiante</TableHead>
-                <TableHead>Mes/Año</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Vencimiento</TableHead>
+                <TableHead>Período</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Acciones</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredFees.map((fee) => (
-                <TableRow key={fee.id}>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">
-                        {fee.users?.first_name} {fee.users?.last_name}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>{fee.month_year}</TableCell>
-                  <TableCell className="font-bold">${fee.amount.toLocaleString()}</TableCell>
-                  <TableCell>{fee.due_date}</TableCell>
-                  <TableCell>{getStatusBadge(fee.status)}</TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
+              {fees.length > 0 ? (
+                fees.map((fee) => (
+                  <TableRow key={fee.id}>
+                    <TableCell className="font-medium">
+                      {fee.users ? `${fee.users.first_name} ${fee.users.last_name}` : "Desconocido"}
+                    </TableCell>
+                    <TableCell>
+                      {fee.currency} {fee.amount.toFixed(2)}
+                    </TableCell>
+                    <TableCell>{new Date(fee.due_date).toLocaleDateString()}</TableCell>
+                    <TableCell>{fee.period}</TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusBadgeVariant(fee.status)}>{fee.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => startEditing(fee)} disabled={saving}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteFee(fee.id)} disabled={saving}>
+                        <Trash className="h-4 w-4 text-red-500" />
+                      </Button>
                       {fee.status === "pending" && (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={() => handleMarkAsPaid(fee.id)}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <CreditCard className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleSendReminder(fee)}>
-                            <Mail className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                      {fee.status === "paid" && (
-                        <Button size="sm" variant="outline" onClick={() => handleDownloadReceipt(fee)}>
-                          <Download className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" onClick={() => handleSendReminder(fee)} disabled={saving}>
+                          <Mail className="h-4 w-4" />
                         </Button>
                       )}
-                    </div>
+                      {fee.status === "paid" && (
+                        <Button variant="ghost" size="sm" onClick={() => handleDownloadReceipt(fee)} disabled={saving}>
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-gray-500">
+                    No hay cuotas registradas.
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

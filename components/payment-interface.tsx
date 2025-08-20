@@ -3,213 +3,189 @@
 import type React from "react"
 
 import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { CreditCard, Upload, FileText, AlertCircle } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, CreditCard, CheckCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { createFee } from "@/lib/database" // Asumiendo que createFee puede simular un pago
+import { sendPaymentConfirmation } from "@/lib/notifications"
+import { generatePaymentReceipt, downloadPdf } from "@/lib/pdf-generator"
 
 interface PaymentInterfaceProps {
-  fee: {
-    id: string
-    month: string
-    amount: number
-    dueDate: string
-    status: string
-  }
-  onPaymentComplete: () => void
+  studentId: string // ID del estudiante que realiza el pago
+  studentName: string
+  studentEmail: string
+  defaultAmount?: number
+  defaultPeriod?: string
 }
 
-export default function PaymentInterface({ fee, onPaymentComplete }: PaymentInterfaceProps) {
+export default function PaymentInterface({
+  studentId,
+  studentName,
+  studentEmail,
+  defaultAmount,
+  defaultPeriod,
+}: PaymentInterfaceProps) {
+  const [amount, setAmount] = useState<string>(defaultAmount?.toFixed(2) || "")
+  const [period, setPeriod] = useState<string>(defaultPeriod || "")
+  const [paymentMethod, setPaymentMethod] = useState<string>("")
   const [loading, setLoading] = useState(false)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      // Validar tipo de archivo
-      const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "application/pdf"]
-      if (!allowedTypes.includes(file.type)) {
-        alert("Solo se permiten archivos JPG, PNG o PDF")
-        return
-      }
+  const handlePayment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setSuccess(null)
+    setLoading(true)
 
-      // Validar tamaño (máximo 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert("El archivo no puede ser mayor a 5MB")
-        return
-      }
+    const parsedAmount = Number.parseFloat(amount)
 
-      setSelectedFile(file)
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setError("Por favor, ingresa un monto válido.")
+      setLoading(false)
+      return
     }
-  }
-
-  const handleUploadProof = async () => {
-    if (!selectedFile) {
-      alert("Debes seleccionar un archivo")
+    if (!period) {
+      setError("Por favor, selecciona el período de la cuota.")
+      setLoading(false)
+      return
+    }
+    if (!paymentMethod) {
+      setError("Por favor, selecciona un método de pago.")
+      setLoading(false)
       return
     }
 
-    setLoading(true)
     try {
-      // Simular subida de archivo
-      // En producción, aquí subirías el archivo a un servicio como Vercel Blob o AWS S3
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // Simular la creación de una cuota como "pagada" directamente
+      // En un sistema real, esto interactuaría con una pasarela de pago (ej. Mercado Pago)
+      const newFee = await createFee({
+        student_id: studentId,
+        amount: parsedAmount,
+        currency: "USD", // O la moneda que uses
+        due_date: new Date().toISOString().split("T")[0], // Fecha de vencimiento (puede ser la actual o futura)
+        payment_date: new Date().toISOString().split("T")[0], // Fecha de pago
+        status: "paid", // Marcar como pagado directamente
+        period: period,
+        notes: `Pago realizado vía ${paymentMethod}`,
+      })
 
-      // Simular actualización del estado del pago
-      console.log("Subiendo comprobante para:", fee.id)
-      console.log("Archivo:", selectedFile.name)
+      // Generar recibo PDF
+      const receiptData = {
+        receiptId: newFee.id.substring(0, 8),
+        studentName: studentName,
+        studentId: studentId,
+        amount: newFee.amount,
+        currency: newFee.currency,
+        paymentDate: newFee.payment_date,
+        dueDate: newFee.due_date,
+        period: newFee.period,
+        status: "Pagado",
+        notes: newFee.notes,
+        schoolName: "Que Viva El Fútbol",
+        schoolAddress: "Calle Falsa 123, Ciudad",
+        schoolPhone: "+123456789",
+        schoolEmail: "info@quevivaelfutbol.com",
+      }
+      const receiptBlob = await generatePaymentReceipt(receiptData)
+      await downloadPdf(receiptBlob, `recibo-${receiptData.receiptId}.pdf`)
 
-      // Aquí actualizarías el estado del pago a 'pending_approval'
-      // await updateFee(fee.id, {
-      //   status: 'pending_approval',
-      //   payment_proof_filename: selectedFile.name
-      // })
+      // Enviar confirmación por email
+      await sendPaymentConfirmation(studentName, studentEmail, parsedAmount, receiptData.receiptId)
 
-      setUploadSuccess(true)
-      setTimeout(() => {
-        onPaymentComplete()
-        setIsDialogOpen(false)
-        setUploadSuccess(false)
-        setSelectedFile(null)
-      }, 2000)
-    } catch (error) {
-      console.error("Error uploading proof:", error)
-      alert("Error al subir el comprobante")
+      setSuccess("¡Pago realizado con éxito! Se ha descargado tu recibo y enviado una confirmación por email.")
+      setAmount("")
+      setPeriod("")
+      setPaymentMethod("")
+    } catch (err: any) {
+      console.error("Error processing payment:", err)
+      setError(err.message || "Error al procesar el pago. Intenta nuevamente.")
     } finally {
       setLoading(false)
     }
   }
 
-  const getBankInfo = () => {
-    return {
-      bank: "Banco Ejemplo",
-      account: "1234567890",
-      cbu: "0123456789012345678901",
-      alias: "FUTBOL.BETO.ESCUELA",
-      holder: "Escuela de Fútbol Profe Beto",
-    }
-  }
-
-  const bankInfo = getBankInfo()
-
   return (
-    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-      <DialogTrigger asChild>
-        <Button className="bg-green-600 hover:bg-green-700">
-          <CreditCard className="h-4 w-4 mr-2" />
-          Pagar Cuota
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Pagar Cuota</DialogTitle>
-          <DialogDescription>
-            Cuota de {fee.month} - ${fee.amount.toLocaleString()}
-          </DialogDescription>
-        </DialogHeader>
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <CreditCard className="h-6 w-6" /> Realizar Pago
+        </CardTitle>
+        <CardDescription>Completa el formulario para pagar tu cuota.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert className="border-green-200 bg-green-50">
+            <AlertDescription className="text-green-800">{success}</AlertDescription>
+          </Alert>
+        )}
 
-        <div className="space-y-6">
-          {/* Información bancaria */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2 mb-4">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                  <h3 className="font-semibold">Datos para Transferencia</h3>
-                </div>
+        <form onSubmit={handlePayment} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="amount">Monto a Pagar (USD)</Label>
+            <Input
+              id="amount"
+              type="number"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Ej: 50.00"
+              required
+              disabled={loading}
+            />
+          </div>
 
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Banco:</span>
-                    <span className="font-medium">{bankInfo.bank}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Cuenta:</span>
-                    <span className="font-medium">{bankInfo.account}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">CBU:</span>
-                    <span className="font-medium font-mono text-xs">{bankInfo.cbu}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Alias:</span>
-                    <span className="font-medium">{bankInfo.alias}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Titular:</span>
-                    <span className="font-medium">{bankInfo.holder}</span>
-                  </div>
-                  <div className="flex justify-between border-t pt-2">
-                    <span className="text-gray-600 font-semibold">Monto:</span>
-                    <span className="font-bold text-green-600">${fee.amount.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-2">
+            <Label htmlFor="period">Período de la Cuota</Label>
+            <Input
+              id="period"
+              type="text"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              placeholder="Ej: Julio 2024"
+              required
+              disabled={loading}
+            />
+          </div>
 
-          {/* Subir comprobante */}
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Upload className="h-5 w-5 text-orange-600" />
-              <h3 className="font-semibold">Subir Comprobante</h3>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="paymentMethod">Método de Pago</Label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod} disabled={loading}>
+              <SelectTrigger id="paymentMethod">
+                <SelectValue placeholder="Selecciona un método" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="credit_card">Tarjeta de Crédito</SelectItem>
+                <SelectItem value="debit_card">Tarjeta de Débito</SelectItem>
+                <SelectItem value="mercado_pago">Mercado Pago</SelectItem>
+                <SelectItem value="bank_transfer">Transferencia Bancaria</SelectItem>
+                <SelectItem value="cash">Efectivo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Después de realizar la transferencia, sube el comprobante para que sea aprobado por el administrador.
-              </AlertDescription>
-            </Alert>
-
-            <div className="space-y-3">
-              <Label htmlFor="proof">Comprobante de Pago</Label>
-              <Input
-                id="proof"
-                type="file"
-                accept=".jpg,.jpeg,.png,.pdf"
-                onChange={handleFileSelect}
-                disabled={loading}
-              />
-              {selectedFile && <p className="text-sm text-gray-600">Archivo seleccionado: {selectedFile.name}</p>}
-            </div>
-
-            {uploadSuccess && (
-              <Alert className="border-green-200 bg-green-50">
-                <AlertDescription className="text-green-800">
-                  ¡Comprobante subido exitosamente! Tu pago está pendiente de aprobación.
-                </AlertDescription>
-              </Alert>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="mr-2 h-4 w-4" /> Confirmar Pago
+              </>
             )}
-
-            <Button
-              onClick={handleUploadProof}
-              disabled={loading || !selectedFile || uploadSuccess}
-              className="w-full bg-orange-600 hover:bg-orange-700"
-            >
-              {loading ? "Subiendo comprobante..." : uploadSuccess ? "¡Comprobante subido!" : "Subir Comprobante"}
-            </Button>
-          </div>
-
-          <div className="text-xs text-gray-500 space-y-1">
-            <p>• Formatos aceptados: JPG, PNG, PDF</p>
-            <p>• Tamaño máximo: 5MB</p>
-            <p>• El pago será aprobado en 24-48 horas</p>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

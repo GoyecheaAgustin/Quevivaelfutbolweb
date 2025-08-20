@@ -1,423 +1,251 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { User, CreditCard, QrCode, Download, LogOut, Loader2 } from "lucide-react"
-import { signOut, getCurrentUser } from "@/lib/auth"
 import { useRouter } from "next/navigation"
-import { getUserByUserId, getFees } from "@/lib/database"
-import PaymentInterface from "@/components/payment-interface"
-import { LogoCompact } from "@/components/logo"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Loader2, QrCode, DollarSign, CalendarCheck, Newspaper, LogOut, XCircle } from "lucide-react"
+import QRCodeDisplay from "@/components/qr-code-display" // Importar el componente QR
+import { getCurrentUser, signOut } from "@/lib/auth"
+import { getStudentStats } from "@/lib/database"
 
-export default function UserDashboard() {
-  const [studentData, setUserData] = useState<any>(null)
-  const [fees, setFees] = useState<any[]>([])
+export default function StudentDashboardPage() {
+  const [user, setUser] = useState<any>(null)
+  const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
+    async function loadUserData() {
+      try {
+        const currentUser = await getCurrentUser()
+        setUser(currentUser)
+
+        if (currentUser && currentUser.id) {
+          // Asumiendo que currentUser.id es el user_id de la tabla 'users'
+          const studentStats = await getStudentStats(currentUser.id)
+          setStats(studentStats)
+        } else {
+          setError("No se pudo obtener el ID del usuario.")
+        }
+      } catch (err: any) {
+        console.error("Error loading user data or stats:", err)
+        setError(err.message || "Error al cargar los datos del estudiante.")
+        // Si hay un error de autenticación, redirigir al login
+        if (err.message.includes("No se pudo obtener el usuario") || err.message.includes("No se encontró el perfil")) {
+          router.push("/login")
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
     loadUserData()
-  }, [])
+  }, [router])
 
-  const loadUserData = async () => {
+  const handleLogout = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      setError("")
-
-      // Obtener usuario actual
-      const currentUser = await getCurrentUser()
-      if (!currentUser) {
-        router.push("/login")
-        return
-      }
-
-      // Obtener datos del estudiante usando la nueva función específica
-      const student = await getUserByUserId(currentUser.id)
-
-      if (!student) {
-        setError("No se encontraron datos del estudiante. Contacta al administrador.")
-        return
-      }
-
-      setUserData({
-        id: student.id,
-        name: `${student.first_name} ${student.last_name}`,
-        firstName: student.first_name,
-        lastName: student.last_name,
-        email: currentUser.email,
-        category: student.category,
-        status: student.status,
-        qrCode: student.qr_code,
-        phone: student.phone,
-        parentName: student.parent_name,
-        parentPhone: student.parent_phone,
-        parentEmail: student.parent_email,
-        address: student.address,
-        enrollmentDate: student.enrollment_date,
-        notes: student.notes,
-      })
-
-      // Obtener cuotas del estudiante
-      const studentFees = await getFees(student.id)
-      setFees(studentFees || [])
+      await signOut()
+      router.push("/login")
     } catch (err: any) {
-      console.error("Error loading student data:", err)
-      setError(`Error al cargar los datos: ${err.message}`)
+      console.error("Error logging out:", err)
+      setError(err.message || "Error al cerrar sesión.")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleLogout = async () => {
-    await signOut()
-    router.push("/login")
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
-        return <Badge className="bg-green-100 text-green-800">Pagado</Badge>
-      case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-800">Pendiente</Badge>
-      case "pending_approval":
-        return <Badge className="bg-orange-100 text-orange-800">Pendiente Aprobación</Badge>
-      case "overdue":
-        return <Badge className="bg-red-100 text-red-800">Vencido</Badge>
-      case "rejected":
-        return <Badge className="bg-red-100 text-red-800">Rechazado</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
-    }
-  }
-
-  const getNextPayment = () => {
-    const pendingFees = fees.filter((f) => f.status === "pending")
-    if (pendingFees.length === 0) return null
-
-    // Ordenar por fecha de vencimiento y tomar la más próxima
-    const sortedFees = pendingFees.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
-    return sortedFees[0]
-  }
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Cargando datos del estudiante...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        <p className="ml-4 text-lg text-blue-800">Cargando dashboard...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-            <p className="text-red-800 mb-4">{error}</p>
-            <div className="space-y-2">
-              <Button onClick={loadUserData} variant="outline" className="w-full bg-transparent">
-                Reintentar
-              </Button>
-              <Button onClick={() => router.push("/login")} className="w-full">
-                Volver al Login
-              </Button>
-            </div>
-          </div>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-50 to-red-100 p-4 text-red-800">
+        <XCircle className="h-10 w-10 mb-4" />
+        <h2 className="text-xl font-bold mb-2">Error al cargar el dashboard</h2>
+        <p className="text-center">{error}</p>
+        <Button onClick={() => router.push("/login")} className="mt-4">
+          Volver al Login
+        </Button>
       </div>
     )
   }
 
-  if (!studentData) {
+  if (!user) {
+    // Esto debería ser manejado por la redirección en loadUserData, pero como fallback
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">No se pudieron cargar los datos del estudiante</p>
-          <Button onClick={() => router.push("/login")}>Volver al Login</Button>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4">
+        <p className="text-lg text-gray-700">No autenticado. Redirigiendo...</p>
+        <Button onClick={() => router.push("/login")} className="mt-4">
+          Ir a Login
+        </Button>
       </div>
     )
   }
 
-  const nextPayment = getNextPayment()
+  // Datos para el QR (ej. un enlace al perfil del estudiante o su ID)
+  const qrData = `student_id:${user.id}` // Usar el ID del usuario para el QR
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <LogoCompact width={50} height={50} />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Mi Cuenta</h1>
-                <p className="text-sm text-gray-500">Que Viva El Fútbol - Bienvenido, {studentData.name}</p>
-              </div>
-            </div>
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Cerrar Sesión
-            </Button>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-xl p-6 lg:p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-blue-800">Bienvenido, {user.email}</h1>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            className="text-red-600 hover:text-red-800 border-red-300 hover:border-red-500 bg-transparent"
+          >
+            <LogOut className="mr-2 h-4 w-4" /> Cerrar Sesión
+          </Button>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Estado</CardTitle>
-              <User className="h-4 w-4 text-muted-foreground" />
+        <Separator className="mb-6 bg-blue-200" />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {/* Tarjeta de QR Code */}
+          <Card className="col-span-1 flex flex-col items-center justify-center p-4">
+            <CardHeader className="text-center pb-2">
+              <QrCode className="h-10 w-10 text-blue-600 mx-auto mb-2" />
+              <CardTitle className="text-xl">Tu Código QR</CardTitle>
+              <CardDescription>Para asistencia y pagos</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold capitalize">{studentData.status}</div>
-              <p className="text-xs text-muted-foreground">Año: {studentData.category}</p>
+            <CardContent className="w-full flex justify-center">
+              <QRCodeDisplay
+                data={qrData}
+                title="QR de Estudiante"
+                description="Escanea para registrar asistencia"
+                filename={`qr_estudiante_${user.id}.png`}
+              />
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Próximo Pago</CardTitle>
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
+          {/* Tarjeta de Pagos */}
+          <Card className="col-span-1">
+            <CardHeader className="pb-2">
+              <DollarSign className="h-8 w-8 text-green-600 mb-2" />
+              <CardTitle className="text-xl">Estado de Pagos</CardTitle>
+              <CardDescription>Resumen de tus cuotas</CardDescription>
             </CardHeader>
             <CardContent>
-              {nextPayment ? (
-                <>
-                  <div className="text-2xl font-bold">${nextPayment.amount.toLocaleString()}</div>
-                  <p className="text-xs text-muted-foreground">Vence: {nextPayment.due_date}</p>
-                </>
+              {stats?.payments ? (
+                <div className="space-y-2">
+                  <p>
+                    Total Cuotas: <span className="font-semibold">{stats.payments.total}</span>
+                  </p>
+                  <p>
+                    Cuotas Pagadas: <span className="font-semibold text-green-600">{stats.payments.paid}</span>
+                  </p>
+                  <p>
+                    Cuotas Pendientes: <span className="font-semibold text-red-600">{stats.payments.pending}</span>
+                  </p>
+                  <p>
+                    Tasa de Pago: <span className="font-semibold">{stats.payments.rate}%</span>
+                  </p>
+                </div>
               ) : (
-                <>
-                  <div className="text-2xl font-bold text-green-600">Al día</div>
-                  <p className="text-xs text-muted-foreground">Sin pagos pendientes</p>
-                </>
+                <p className="text-gray-500">Cargando datos de pagos...</p>
               )}
+              <Button variant="link" className="mt-4 p-0">
+                Ver historial de pagos
+              </Button>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Código QR</CardTitle>
-              <QrCode className="h-4 w-4 text-muted-foreground" />
+          {/* Tarjeta de Asistencia */}
+          <Card className="col-span-1">
+            <CardHeader className="pb-2">
+              <CalendarCheck className="h-8 w-8 text-purple-600 mb-2" />
+              <CardTitle className="text-xl">Asistencia</CardTitle>
+              <CardDescription>Tu récord de asistencia</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{studentData.qrCode}</div>
-              <p className="text-xs text-muted-foreground">Para identificación</p>
+              {stats?.attendance ? (
+                <div className="space-y-2">
+                  <p>
+                    Sesiones Totales: <span className="font-semibold">{stats.attendance.total}</span>
+                  </p>
+                  <p>
+                    Sesiones Presente: <span className="font-semibold text-purple-600">{stats.attendance.present}</span>
+                  </p>
+                  <p>
+                    Tasa de Asistencia: <span className="font-semibold">{stats.attendance.rate}%</span>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-gray-500">Cargando datos de asistencia...</p>
+              )}
+              <Button variant="link" className="mt-4 p-0">
+                Ver calendario de asistencia
+              </Button>
             </CardContent>
           </Card>
         </div>
 
-        {/* Main Content */}
-        <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="profile">Mi Perfil</TabsTrigger>
-            <TabsTrigger value="payments">Pagos</TabsTrigger>
-            <TabsTrigger value="news">Noticias</TabsTrigger>
-            <TabsTrigger value="qr">Mi QR</TabsTrigger>
-          </TabsList>
+        {/* Sección de Noticias (ejemplo) */}
+        <Card className="mb-8">
+          <CardHeader className="pb-2">
+            <Newspaper className="h-8 w-8 text-orange-600 mb-2" />
+            <CardTitle className="text-xl">Últimas Noticias</CardTitle>
+            <CardDescription>Mantente al día con los anuncios de la escuela</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              <li>
+                <a href="#" className="text-blue-600 hover:underline">
+                  ¡Inscripciones abiertas para el torneo de verano!
+                </a>{" "}
+                - 15/07/2024
+              </li>
+              <li>
+                <a href="#" className="text-blue-600 hover:underline">
+                  Cambio de horario para entrenamientos de categoría 2010
+                </a>{" "}
+                - 10/07/2024
+              </li>
+              <li>
+                <a href="#" className="text-blue-600 hover:underline">
+                  Clínica de fútbol con ex-jugador profesional
+                </a>{" "}
+                - 01/07/2024
+              </li>
+            </ul>
+            <Button variant="link" className="mt-4 p-0">
+              Ver todas las noticias
+            </Button>
+          </CardContent>
+        </Card>
 
-          <TabsContent value="profile" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Información Personal</CardTitle>
-                <CardDescription>Tus datos personales y estado de inscripción</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Nombre Completo</label>
-                    <p className="text-lg">{studentData.name}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Email</label>
-                    <p className="text-lg">{studentData.email}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Año de Nacimiento</label>
-                    <p className="text-lg">{studentData.category}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Estado</label>
-                    <p className="text-lg capitalize">{studentData.status}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Teléfono</label>
-                    <p className="text-lg">{studentData.phone || "No registrado"}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Fecha de Inscripción</label>
-                    <p className="text-lg">
-                      {studentData.enrollmentDate
-                        ? new Date(studentData.enrollmentDate).toLocaleDateString()
-                        : "No registrada"}
-                    </p>
-                  </div>
-                </div>
-
-                {studentData.address && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Dirección</label>
-                    <p className="text-lg">{studentData.address}</p>
-                  </div>
-                )}
-
-                <div className="border-t pt-4">
-                  <h3 className="text-lg font-semibold mb-2">Datos del Padre/Tutor</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Nombre</label>
-                      <p className="text-lg">{studentData.parentName}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Teléfono</label>
-                      <p className="text-lg">{studentData.parentPhone}</p>
-                    </div>
-                    {studentData.parentEmail && (
-                      <div>
-                        <label className="text-sm font-medium text-gray-700">Email</label>
-                        <p className="text-lg">{studentData.parentEmail}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {studentData.notes && (
-                  <div className="border-t pt-4">
-                    <label className="text-sm font-medium text-gray-700">Observaciones</label>
-                    <p className="text-lg">{studentData.notes}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="payments" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Estado de Pagos</h2>
-              {nextPayment && (
-                <PaymentInterface
-                  fee={{
-                    id: nextPayment.id,
-                    month: nextPayment.month_year,
-                    amount: nextPayment.amount,
-                    dueDate: nextPayment.due_date,
-                    status: nextPayment.status,
-                  }}
-                  onPaymentComplete={loadUserData}
-                />
-              )}
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Historial de Cuotas</CardTitle>
-                <CardDescription>Estado de tus pagos mensuales</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {fees.length > 0 ? (
-                    fees.map((fee) => (
-                      <div key={fee.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-4">
-                            <div>
-                              <p className="font-medium">{fee.month_year}</p>
-                              <p className="text-sm text-gray-500">Vence: {fee.due_date}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-bold">${fee.amount.toLocaleString()}</p>
-                              {fee.payment_date && (
-                                <p className="text-sm text-gray-500">
-                                  Pagado: {new Date(fee.payment_date).toLocaleDateString()}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          {getStatusBadge(fee.status)}
-                          {fee.status === "paid" && (
-                            <Button variant="outline" size="sm">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {fee.status === "pending" && (
-                            <PaymentInterface
-                              fee={{
-                                id: fee.id,
-                                month: fee.month_year,
-                                amount: fee.amount,
-                                dueDate: fee.due_date,
-                                status: fee.status,
-                              }}
-                              onPaymentComplete={loadUserData}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <CreditCard className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No hay cuotas registradas</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="news" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Noticias y Comunicados</CardTitle>
-                <CardDescription>Últimas novedades de Que Viva El Fútbol - Profe Beto</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="border-l-4 border-blue-500 pl-4 py-2">
-                    <h3 className="font-semibold">Sistema Inicializado</h3>
-                    <p className="text-sm text-gray-600 mb-2">
-                      El sistema ha sido configurado correctamente. Ya puedes gestionar tus pagos y ver tu información.
-                    </p>
-                    <p className="text-xs text-gray-500">Sistema</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="qr" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Mi Código QR</CardTitle>
-                <CardDescription>Usa este código para identificarte en la cancha</CardDescription>
-              </CardHeader>
-              <CardContent className="text-center">
-                <div className="bg-white p-8 rounded-lg border-2 border-gray-200 inline-block">
-                  <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-                    <QrCode className="h-32 w-32 text-gray-400" />
-                  </div>
-                  <p className="font-mono text-lg font-bold">{studentData.qrCode}</p>
-                </div>
-                <div className="mt-6 space-x-4">
-                  <Button variant="outline">
-                    <Download className="h-4 w-4 mr-2" />
-                    Descargar QR
-                  </Button>
-                  <Button variant="outline">Compartir</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        {/* Sección de Perfil (ejemplo) */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xl">Mi Perfil</CardTitle>
+            <CardDescription>Información personal y de contacto</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p>
+              <strong>Email:</strong> {user.email}
+            </p>
+            <p>
+              <strong>Rol:</strong> {user.role}
+            </p>
+            {/* Aquí podrías mostrar más detalles del perfil del estudiante si los cargas */}
+            <Button variant="link" className="mt-4 p-0">
+              Editar perfil
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

@@ -1,271 +1,215 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Calendar, Check, X, Users } from "lucide-react"
-import { getUsers, getAttendance, markAttendance } from "@/lib/database"
+import { Loader2, Calendar, Save, Search } from "lucide-react"
+import { getAttendance, markAttendance, getUsers } from "@/lib/database"
+import { format } from "date-fns"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
-interface User {
+interface Student {
   id: string
   first_name: string
   last_name: string
   category: string
-  status: string
 }
 
 interface AttendanceRecord {
   student_id: string
+  date: string
   present: boolean
-  notes?: string
 }
 
 export default function AttendanceManagement() {
-  const [students, setUsers] = useState<User[]>([])
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"))
+  const [students, setStudents] = useState<Student[]>([])
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
     loadData()
   }, [selectedDate])
 
   const loadData = async () => {
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
     try {
-      setLoading(true)
-      setError(null)
-      const [studentsData, attendanceData] = await Promise.all([
-        getUsers().catch((err) => {
-          console.error("Error loading students:", err)
-          return []
-        }),
-        getAttendance(selectedDate).catch((err) => {
-          console.error("Error loading attendance:", err)
-          return []
-        }),
-      ])
+      const allUsers = await getUsers()
+      const studentUsers = allUsers.filter((u: any) => u.role === "student")
+      setStudents(studentUsers)
 
-      const activeUsers = studentsData?.filter((s) => s.status === "active") || []
-      setUsers(activeUsers)
-
-      // Crear mapa de asistencia existente
-      const attendanceMap = new Map()
-      attendanceData?.forEach((record) => {
-        attendanceMap.set(record.student_id, record.present)
-      })
-
-      // Inicializar estado de asistencia
-      const initialAttendance = activeUsers.map((student) => ({
-        student_id: student.id,
-        present: attendanceMap.get(student.id) || false,
-        notes: "",
-      }))
-
-      setAttendance(initialAttendance)
-    } catch (error) {
-      console.error("Error loading data:", error)
-      // Establecer datos vacíos en caso de error
-      setUsers([])
-      setAttendance([])
-      setError("Error al cargar los datos. Intenta nuevamente.")
+      const attendanceRecords = await getAttendance(selectedDate)
+      setAttendance(attendanceRecords || [])
+    } catch (err: any) {
+      console.error("Error loading attendance data:", err)
+      setError(err.message || "Error al cargar los datos de asistencia.")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleAttendanceChange = (studentId: string, present: boolean) => {
-    setAttendance((prev) => prev.map((record) => (record.student_id === studentId ? { ...record, present } : record)))
+  const handleAttendanceChange = (studentId: string, isPresent: boolean) => {
+    setAttendance((prev) => {
+      const existingIndex = prev.findIndex((record) => record.student_id === studentId)
+      if (existingIndex !== -1) {
+        const updated = [...prev]
+        updated[existingIndex] = { ...updated[existingIndex], present: isPresent }
+        return updated
+      } else {
+        return [...prev, { student_id: studentId, date: selectedDate, present: isPresent }]
+      }
+    })
   }
 
   const handleSaveAttendance = async () => {
     setSaving(true)
+    setError(null)
+    setSuccess(null)
     try {
-      const attendanceData = attendance.map((record) => ({
-        student_id: record.student_id,
-        date: selectedDate,
-        present: record.present,
-        notes: record.notes || null,
-      }))
+      // Solo guardar los registros que han sido modificados o son nuevos
+      const recordsToSave = students.map((student) => {
+        const existingRecord = attendance.find((att) => att.student_id === student.id)
+        return {
+          student_id: student.id,
+          date: selectedDate,
+          present: existingRecord ? existingRecord.present : false, // Asume false si no hay registro previo
+        }
+      })
 
-      await markAttendance(attendanceData)
-      alert("Asistencia guardada exitosamente")
-    } catch (error) {
-      console.error("Error saving attendance:", error)
-      alert("Error al guardar la asistencia")
+      await markAttendance(recordsToSave)
+      setSuccess("Asistencia guardada exitosamente.")
+      // Recargar para asegurar que los datos mostrados son los de la DB
+      await loadData()
+    } catch (err: any) {
+      console.error("Error saving attendance:", err)
+      setError(err.message || "Error al guardar la asistencia.")
     } finally {
       setSaving(false)
     }
   }
 
-  const markAllPresent = () => {
-    setAttendance((prev) => prev.map((record) => ({ ...record, present: true })))
-  }
-
-  const markAllAbsent = () => {
-    setAttendance((prev) => prev.map((record) => ({ ...record, present: false })))
-  }
-
-  const presentCount = attendance.filter((record) => record.present).length
-  const totalUsers = students.length
-  const attendanceRate = totalUsers > 0 ? Math.round((presentCount / totalUsers) * 100) : 0
+  const filteredStudents = students.filter(
+    (student) =>
+      student.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.category.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Control de Asistencia</h2>
-        <div className="flex items-center space-x-4">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-2 border rounded-md"
-          />
-          <Button onClick={handleSaveAttendance} disabled={saving} className="bg-green-600 hover:bg-green-700">
-            {saving ? "Guardando..." : "Guardar Asistencia"}
-          </Button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-red-800">{error}</p>
-          <Button onClick={loadData} variant="outline" size="sm" className="mt-2 bg-transparent">
-            Reintentar
-          </Button>
-        </div>
-      )}
-
-      {/* Estadísticas del día */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Estudiantes</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalUsers}</div>
-            <p className="text-xs text-muted-foreground">Estudiantes activos</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Presentes</CardTitle>
-            <Check className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{presentCount}</div>
-            <p className="text-xs text-muted-foreground">Asistieron hoy</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ausentes</CardTitle>
-            <X className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{totalUsers - presentCount}</div>
-            <p className="text-xs text-muted-foreground">No asistieron</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasa de Asistencia</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{attendanceRate}%</div>
-            <p className="text-xs text-muted-foreground">Del total</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Controles rápidos */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Controles Rápidos</CardTitle>
-          <CardDescription>Marca asistencia masiva</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex space-x-4">
-            <Button onClick={markAllPresent} variant="outline" className="bg-green-50 hover:bg-green-100">
-              <Check className="h-4 w-4 mr-2" />
-              Marcar Todos Presentes
-            </Button>
-            <Button onClick={markAllAbsent} variant="outline" className="bg-red-50 hover:bg-red-100">
-              <X className="h-4 w-4 mr-2" />
-              Marcar Todos Ausentes
-            </Button>
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Calendar className="h-6 w-6" /> Gestión de Asistencia
+        </CardTitle>
+        <CardDescription>Registra y visualiza la asistencia de los estudiantes.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="flex-1 w-full">
+            <Label htmlFor="attendanceDate">Fecha de Asistencia</Label>
+            <Input
+              id="attendanceDate"
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-full"
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex-1 w-full">
+            <Label htmlFor="searchStudent">Buscar Estudiante</Label>
+            <div className="relative">
+              <Input
+                id="searchStudent"
+                type="text"
+                placeholder="Nombre, apellido o categoría"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8"
+              />
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            </div>
+          </div>
+        </div>
 
-      {/* Lista de asistencia */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Asistencia - {selectedDate}</CardTitle>
-          <CardDescription>Marca la asistencia de cada estudiante</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Estudiante</TableHead>
-                <TableHead>Categoría</TableHead>
-                <TableHead>Presente</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {students.map((student) => {
-                const attendanceRecord = attendance.find((a) => a.student_id === student.id)
-                const isPresent = attendanceRecord?.present || false
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert className="border-green-200 bg-green-50">
+            <AlertDescription className="text-green-800">{success}</AlertDescription>
+          </Alert>
+        )}
 
-                return (
-                  <TableRow key={student.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">
+        {loading ? (
+          <div className="flex items-center justify-center h-48">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <p className="ml-4 text-lg text-blue-800">Cargando asistencia...</p>
+          </div>
+        ) : (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Categoría</TableHead>
+                  <TableHead className="text-center">Presente</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredStudents.length > 0 ? (
+                  filteredStudents.map((student) => {
+                    const isPresent = attendance.find((record) => record.student_id === student.id)?.present || false
+                    return (
+                      <TableRow key={student.id}>
+                        <TableCell>
                           {student.first_name} {student.last_name}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{student.category}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Checkbox
-                        checked={isPresent}
-                        onCheckedChange={(checked) => handleAttendanceChange(student.id, checked as boolean)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {isPresent ? (
-                        <Badge className="bg-green-100 text-green-800">
-                          <Check className="h-3 w-3 mr-1" />
-                          Presente
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-red-100 text-red-800">
-                          <X className="h-3 w-3 mr-1" />
-                          Ausente
-                        </Badge>
-                      )}
+                        </TableCell>
+                        <TableCell>{student.category}</TableCell>
+                        <TableCell className="text-center">
+                          <Checkbox
+                            checked={isPresent}
+                            onCheckedChange={(checked) => handleAttendanceChange(student.id, checked as boolean)}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-gray-500">
+                      No se encontraron estudiantes.
                     </TableCell>
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+                )}
+              </TableBody>
+            </Table>
+
+            <Button onClick={handleSaveAttendance} disabled={saving || loading} className="w-full">
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" /> Guardar Asistencia
+                </>
+              )}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }

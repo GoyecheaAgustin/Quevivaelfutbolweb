@@ -1,12 +1,4 @@
-""// auth.ts - Versión corregida para manejar registro e inserción de perfil post-login
 import { supabase } from "./supabase"
-import {
-  mockSignIn,
-  mockGetCurrentUser,
-  mockSignOut,
-  mockSignUp,
-  mockCheckUserExists
-} from "./mock-auth"
 
 export interface User {
   id: string
@@ -14,101 +6,191 @@ export interface User {
   role: "student" | "admin" | "coach"
 }
 
-const USE_MOCK_AUTH = false // Mantené esto en false para Supabase real
+const USE_MOCK_AUTH = false
 
 export async function signIn(email: string, password: string) {
-  if (USE_MOCK_AUTH) return await mockSignIn(email, password)
+  if (USE_MOCK_AUTH) {
+    throw new Error("Mock auth not implemented")
+  }
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) throw error
+  try {
+    console.log("🔐 Iniciando sesión para:", email)
 
-  const user = data.user
-  if (!user) throw new Error("No se pudo obtener el usuario.")
-  console.log("✅ Usuario autenticado:", JSON.stringify(user))
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    })
 
-  const { data: userProfile, error: profileError } = await supabase
-    .from("users")
-    .select("completo") // ⚠️ solo pedimos el campo necesario
-    .eq("auth_id", user.id)
-    .maybeSingle()
+    if (error) {
+      console.error("❌ Error en signInWithPassword:", error)
+      throw new Error(error.message)
+    }
 
-  console.log("📂 Resultado de búsqueda de perfil:", userProfile)
+    const user = data.user
+    if (!user) {
+      throw new Error("No se pudo obtener el usuario.")
+    }
 
-  const hasCompleteProfile = userProfile?.completo === true
-  console.log("📌 ¿Tiene perfil completo?:", hasCompleteProfile)
+    console.log("✅ Usuario autenticado:", user.id)
 
-  return {
-    user,
-    requiresProfile: !hasCompleteProfile
+    // Buscar perfil del usuario
+    const { data: userProfile, error: profileError } = await supabase
+      .from("users")
+      .select("profile_completed, role")
+      .eq("auth_id", user.id)
+      .maybeSingle()
+
+    if (profileError) {
+      console.error("❌ Error al buscar perfil:", profileError)
+      // Si no encuentra el perfil, asumir que necesita completarlo
+      return {
+        user,
+        requiresProfile: true,
+      }
+    }
+
+    console.log("📂 Perfil encontrado:", userProfile)
+
+    const hasCompleteProfile = userProfile?.profile_completed === true
+    console.log("📌 ¿Tiene perfil completo?:", hasCompleteProfile)
+
+    return {
+      user,
+      requiresProfile: !hasCompleteProfile,
+    }
+  } catch (error: any) {
+    console.error("❌ Error en signIn:", error)
+    throw error
   }
 }
 
 export async function signUp(email: string, password: string, role = "student") {
-  const signUpResponse = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { role }
-    }
-  })
-
-  if (signUpResponse.error) {
-    if (signUpResponse.error.message.includes("duplicate key value")) {
-      throw new Error("Ya existe una cuenta con ese email.")
-    }
-    throw new Error("Error al registrar usuario: " + signUpResponse.error.message)
+  if (USE_MOCK_AUTH) {
+    throw new Error("Mock auth not implemented")
   }
 
-  const authUserId = signUpResponse.data.user?.id
-  if (!authUserId) throw new Error("No se obtuvo el ID del usuario luego del registro.")
+  try {
+    console.log("📝 Registrando usuario:", email)
 
-  // NO insertar en 'users' acá: esperar a que confirme y complete perfil luego del primer login
-  return signUpResponse.data
+    const signUpResponse = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: {
+        data: { role },
+        emailRedirectTo: undefined,
+      },
+    })
+
+    if (signUpResponse.error) {
+      console.error("❌ Error en signUp:", signUpResponse.error)
+
+      if (
+        signUpResponse.error.message.includes("duplicate") ||
+        signUpResponse.error.message.includes("already registered") ||
+        signUpResponse.error.message.includes("User already registered")
+      ) {
+        throw new Error("Ya existe una cuenta con ese email.")
+      }
+
+      throw new Error("Error al registrar usuario: " + signUpResponse.error.message)
+    }
+
+    const authUserId = signUpResponse.data.user?.id
+    if (!authUserId) {
+      throw new Error("No se obtuvo el ID del usuario luego del registro.")
+    }
+
+    console.log("✅ Usuario registrado exitosamente, ID:", authUserId)
+    return signUpResponse.data
+  } catch (error: any) {
+    console.error("❌ Error en signUp:", error)
+    throw error
+  }
 }
 
 export async function signOut() {
-  if (USE_MOCK_AUTH) return await mockSignOut()
+  if (USE_MOCK_AUTH) {
+    throw new Error("Mock auth not implemented")
+  }
 
-  const { error } = await supabase.auth.signOut()
-  if (error) throw error
-}
-
-export async function getCurrentUser() {
-  if (USE_MOCK_AUTH) return await mockGetCurrentUser()
-
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser()
-
-  if (error || !user) throw error || new Error("No se pudo obtener el usuario")
-
-  // Ahora buscamos en la tabla 'users' por el auth_id
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("id, email, role")
-    .eq("auth_id", user.id)
-    .maybeSingle()
-
-  if (userError || !userData) throw userError || new Error("No se encontró el perfil del usuario")
-
-  return {
-    id: userData.id,
-    email: userData.email,
-    role: userData.role
+  try {
+    console.log("🚪 Cerrando sesión")
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error("❌ Error en signOut:", error)
+      throw error
+    }
+    console.log("✅ Sesión cerrada exitosamente")
+  } catch (error: any) {
+    console.error("❌ Error en signOut:", error)
+    throw error
   }
 }
 
+export async function getCurrentUser() {
+  if (USE_MOCK_AUTH) {
+    throw new Error("Mock auth not implemented")
+  }
 
-export async function checkUserExists(email: string) {
-  if (USE_MOCK_AUTH) return await mockCheckUserExists(email)
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
 
-  const { data, error } = await supabase
-    .from("users")
-    .select("email")
-    .eq("email", email)
-    .maybeSingle()
+    if (error || !user) {
+      throw error || new Error("No se pudo obtener el usuario")
+    }
 
-  if (error) throw error
-  return !!data
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("id, email, role")
+      .eq("auth_id", user.id)
+      .maybeSingle()
+
+    if (userError || !userData) {
+      throw userError || new Error("No se encontró el perfil del usuario")
+    }
+
+    return {
+      id: userData.id,
+      email: userData.email,
+      role: userData.role,
+    }
+  } catch (error: any) {
+    console.error("❌ Error en getCurrentUser:", error)
+    throw error
+  }
+}
+
+export async function checkUserExists(email: string): Promise<boolean> {
+  if (USE_MOCK_AUTH) {
+    throw new Error("Mock auth not implemented")
+  }
+
+  try {
+    console.log("🔍 Verificando existencia de usuario:", email)
+
+    const { data, error } = await supabase
+      .from("users")
+      .select("email")
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle()
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        console.log("✅ Usuario no existe (PGRST116)")
+        return false
+      }
+      console.error("❌ Error al verificar usuario:", error)
+      throw new Error(`Error al verificar usuario: ${error.message}`)
+    }
+
+    const exists = !!data
+    console.log(exists ? "⚠️ Usuario ya existe" : "✅ Usuario no existe")
+    return exists
+  } catch (error: any) {
+    console.error("❌ Excepción en checkUserExists:", error)
+    throw new Error(`Error al verificar email: ${error.message}`)
+  }
 }

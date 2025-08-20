@@ -1,226 +1,221 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, DollarSign, Calendar, BarChart3, LogOut, Loader2, Clock } from "lucide-react"
-import { signOut, getCurrentUser } from "@/lib/auth"
 import { useRouter } from "next/navigation"
-import { getusers, getFees } from "@/lib/database"
-import PaymentManagement from "@/components/payment-management"
-import PaymentApproval from "@/components/payment-approval"
-import AttendanceManagement from "@/components/attendance-management"
-import NewsManagement from "@/components/news-management"
-import ReportsManagement from "@/components/reports-management"
-import UserManagement from "@/components/user-management"
-// Cambiar la importación del logo
-import { LogoCompact } from "@/components/logo"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Loader2, Users, DollarSign, CalendarCheck, Newspaper, LogOut, Settings, XCircle } from "lucide-react"
+import { getCurrentUser, signOut } from "@/lib/auth"
+import { getGeneralStats } from "@/lib/database"
+import { DbConnectionStatus } from "@/components/db-connection-status" // Importar el componente de estado de conexión
 
-export default function AdminDashboard() {
-  const [currentUser, setCurrentUser] = useState<any>(null)
+export default function AdminDashboardPage() {
+  const [user, setUser] = useState<any>(null)
+  const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({
-    totalusers: 0,
-    activeusers: 0,
-    pendingPayments: 0,
-    pendingApprovals: 0,
-    monthlyRevenue: 0,
-  })
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
-    loadUserAndStats()
-  }, [])
+    async function loadUserData() {
+      try {
+        const currentUser = await getCurrentUser()
+        if (currentUser.role !== "admin") {
+          setError("Acceso denegado. Solo los administradores pueden ver esta página.")
+          router.push("/login") // Redirigir si no es admin
+          return
+        }
+        setUser(currentUser)
 
-  const loadUserAndStats = async () => {
+        const generalStats = await getGeneralStats()
+        setStats(generalStats)
+      } catch (err: any) {
+        console.error("Error loading admin data or stats:", err)
+        setError(err.message || "Error al cargar los datos del administrador.")
+        router.push("/login") // Redirigir al login si hay un error de autenticación
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadUserData()
+  }, [router])
+
+  const handleLogout = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-
-      // Obtener usuario actual
-      const user = await getCurrentUser()
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      if (user.role !== "admin") {
-        router.push("/dashboard")
-        return
-      }
-
-      setCurrentUser(user)
-
-      // Cargar estadísticas
-      const [usersData, feesData] = await Promise.all([getusers(), getFees()])
-
-      const users = usersData || []
-      const fees = feesData || []
-
-      const activeusers = users.filter((s) => s.status === "active")
-      const pendingFees = fees.filter((f) => f.status === "pending")
-      const pendingApprovals = fees.filter((f) => f.status === "pending_approval")
-      const paidFees = fees.filter((f) => f.status === "paid")
-
-      // Calcular ingresos del mes actual
-      const currentMonth = new Date().toISOString().slice(0, 7)
-      const monthlyRevenue = paidFees.filter((f) => f.month_year === currentMonth).reduce((sum, f) => sum + f.amount, 0)
-
-      setStats({
-        totalusers: users.length,
-        activeusers: activeusers.length,
-        pendingPayments: pendingFees.length,
-        pendingApprovals: pendingApprovals.length,
-        monthlyRevenue: monthlyRevenue,
-      })
-    } catch (error) {
-      console.error("Error loading data:", error)
+      await signOut()
+      router.push("/login")
+    } catch (err: any) {
+      console.error("Error logging out:", err)
+      setError(err.message || "Error al cerrar sesión.")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleLogout = async () => {
-    await signOut()
-    router.push("/login")
-  }
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        <p className="ml-4 text-lg text-blue-800">Cargando dashboard de administrador...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-50 to-red-100 p-4 text-red-800">
+        <XCircle className="h-10 w-10 mb-4" />
+        <h2 className="text-xl font-bold mb-2">Error de Acceso</h2>
+        <p className="text-center">{error}</p>
+        <Button onClick={() => router.push("/login")} className="mt-4">
+          Volver al Login
+        </Button>
+      </div>
+    )
+  }
+
+  if (!user || user.role !== "admin") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4">
+        <p className="text-lg text-gray-700">Acceso no autorizado. Redirigiendo...</p>
+        <Button onClick={() => router.push("/login")} className="mt-4">
+          Ir a Login
+        </Button>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              {/* En el header, cambiar Logo por LogoCompact */}
-              <LogoCompact width={50} height={50} />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Panel de Administración</h1>
-                <p className="text-sm text-gray-500">Que Viva El Fútbol - {currentUser?.email}</p>
-              </div>
-            </div>
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Cerrar Sesión
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Alumnos</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalusers}</div>
-              <p className="text-xs text-muted-foreground">{stats.activeusers} activos</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pagos Pendientes</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.pendingPayments}</div>
-              <p className="text-xs text-muted-foreground">Cuotas por cobrar</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pendientes Aprobación</CardTitle>
-              <Clock className="h-4 w-4 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{stats.pendingApprovals}</div>
-              <p className="text-xs text-muted-foreground">Comprobantes por revisar</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ingresos del Mes</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${stats.monthlyRevenue.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Mes actual</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Asistencia Hoy</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">85%</div>
-              <p className="text-xs text-muted-foreground">Promedio semanal</p>
-            </CardContent>
-          </Card>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto bg-white rounded-xl shadow-xl p-6 lg:p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-blue-800">Dashboard de Administrador</h1>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            className="text-red-600 hover:text-red-800 border-red-300 hover:border-red-500 bg-transparent"
+          >
+            <LogOut className="mr-2 h-4 w-4" /> Cerrar Sesión
+          </Button>
         </div>
 
-        {/* Main Content */}
-        <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="users">Alumnos</TabsTrigger>
-            <TabsTrigger value="payments">Pagos</TabsTrigger>
-            <TabsTrigger value="approvals" className="relative">
-              Aprobaciones
-              {stats.pendingApprovals > 0 && (
-                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                  {stats.pendingApprovals}
-                </span>
+        <Separator className="mb-6 bg-blue-200" />
+
+        {/* Estado de Conexión a la Base de Datos */}
+        <div className="mb-8">
+          <DbConnectionStatus />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {/* Tarjeta de Usuarios */}
+          <Card className="col-span-1">
+            <CardHeader className="pb-2">
+              <Users className="h-8 w-8 text-blue-600 mb-2" />
+              <CardTitle className="text-xl">Gestión de Usuarios</CardTitle>
+              <CardDescription>Administra estudiantes, coaches y admins</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {stats?.users ? (
+                <div className="space-y-2">
+                  <p>
+                    Total Usuarios: <span className="font-semibold">{stats.users.total}</span>
+                  </p>
+                  <p>
+                    Usuarios Activos: <span className="font-semibold text-green-600">{stats.users.active}</span>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-gray-500">Cargando datos de usuarios...</p>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="attendance">Asistencia</TabsTrigger>
-            <TabsTrigger value="news">Noticias</TabsTrigger>
-            <TabsTrigger value="reports">Reportes</TabsTrigger>
-            <TabsTrigger value="users">Usuarios</TabsTrigger>
-          </TabsList>
+              <Button variant="link" className="mt-4 p-0">
+                Ir a Gestión de Usuarios
+              </Button>
+            </CardContent>
+          </Card>
 
-          <TabsContent value="users" className="space-y-6">
-            <UserManagement />
-          </TabsContent>
+          {/* Tarjeta de Pagos */}
+          <Card className="col-span-1">
+            <CardHeader className="pb-2">
+              <DollarSign className="h-8 w-8 text-green-600 mb-2" />
+              <CardTitle className="text-xl">Gestión de Pagos</CardTitle>
+              <CardDescription>Controla cuotas y recibos</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {stats?.payments ? (
+                <div className="space-y-2">
+                  <p>
+                    Cuotas Pagadas: <span className="font-semibold text-green-600">{stats.payments.paid}</span>
+                  </p>
+                  <p>
+                    Cuotas Pendientes: <span className="font-semibold text-red-600">{stats.payments.pending}</span>
+                  </p>
+                  <p>
+                    Ingresos Totales: <span className="font-semibold">${stats.payments.revenue?.toFixed(2)}</span>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-gray-500">Cargando datos de pagos...</p>
+              )}
+              <Button variant="link" className="mt-4 p-0">
+                Ir a Gestión de Pagos
+              </Button>
+            </CardContent>
+          </Card>
 
-          <TabsContent value="payments" className="space-y-6">
-            <PaymentManagement />
-          </TabsContent>
+          {/* Tarjeta de Asistencia */}
+          <Card className="col-span-1">
+            <CardHeader className="pb-2">
+              <CalendarCheck className="h-8 w-8 text-purple-600 mb-2" />
+              <CardTitle className="text-xl">Gestión de Asistencia</CardTitle>
+              <CardDescription>Registra y revisa la asistencia diaria</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {stats?.attendance?.today ? (
+                <div className="space-y-2">
+                  <p>
+                    Presentes Hoy: <span className="font-semibold">{stats.attendance.today.present}</span>
+                  </p>
+                  <p>
+                    Total Esperado Hoy: <span className="font-semibold">{stats.attendance.today.total}</span>
+                  </p>
+                  <p>
+                    Tasa de Asistencia Hoy: <span className="font-semibold">{stats.attendance.today.rate}%</span>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-gray-500">Cargando datos de asistencia...</p>
+              )}
+              <Button variant="link" className="mt-4 p-0">
+                Ir a Gestión de Asistencia
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
 
-          <TabsContent value="approvals" className="space-y-6">
-            <PaymentApproval />
-          </TabsContent>
-
-          <TabsContent value="attendance" className="space-y-6">
-            <AttendanceManagement />
-          </TabsContent>
-
-          <TabsContent value="news" className="space-y-6">
-            <NewsManagement />
-          </TabsContent>
-
-          <TabsContent value="reports" className="space-y-6">
-            <ReportsManagement />
-          </TabsContent>
-
-          <TabsContent value="users" className="space-y-6">
-            <UserManagement />
-          </TabsContent>
-        </Tabs>
+        {/* Sección de Herramientas Administrativas */}
+        <Card className="mb-8">
+          <CardHeader className="pb-2">
+            <Settings className="h-8 w-8 text-gray-600 mb-2" />
+            <CardTitle className="text-xl">Herramientas Administrativas</CardTitle>
+            <CardDescription>Acceso rápido a funciones clave</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Button variant="outline" className="justify-start bg-transparent">
+              <Newspaper className="mr-2 h-4 w-4" /> Gestionar Noticias
+            </Button>
+            <Button variant="outline" className="justify-start bg-transparent">
+              <Users className="mr-2 h-4 w-4" /> Reportes y Estadísticas
+            </Button>
+            <Button variant="outline" className="justify-start bg-transparent">
+              <Settings className="mr-2 h-4 w-4" /> Configuración del Sistema
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

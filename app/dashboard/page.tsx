@@ -1,56 +1,46 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { getCurrentUser, type User } from "@/lib/auth"
 import { Loader2 } from "lucide-react"
+import { getCurrentUser } from "@/lib/auth"
 
-export default function DashboardPage() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+export default function DashboardRedirectPage() {
   const router = useRouter()
 
   useEffect(() => {
-    async function checkUser() {
+    async function redirectUser() {
       try {
-        const currentUser = await getCurrentUser()
-        if (!currentUser) {
+        const user = await getCurrentUser()
+        if (user) {
+          if (user.profile_completed === false && user.role === "student") {
+            router.push("/completar-perfil")
+          } else if (user.role === "admin") {
+            router.push("/admin")
+          } else if (user.role === "coach") {
+            router.push("/coach")
+          } else if (user.role === "student") {
+            router.push("/student")
+          } else {
+            // Fallback para roles desconocidos o no manejados
+            router.push("/login")
+          }
+        } else {
           router.push("/login")
-          return
-        }
-
-        setUser(currentUser)
-
-        // Redirigir según el rol
-        if (currentUser.role === "admin") {
-          router.push("/admin")
-        } else if (currentUser.role === "student") {
-          router.push("/student")
-        } else if (currentUser.role === "coach") {
-          router.push("/coach")
         }
       } catch (error) {
-        router.push("/login")
-      } finally {
-        setLoading(false)
+        console.error("Error al obtener el usuario o redirigir:", error)
+        router.push("/login") // Redirigir al login en caso de error
       }
     }
 
-    checkUser()
+    redirectUser()
   }, [router])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    )
-  }
-
   return (
-  <div className="min-h-screen flex items-center justify-center">
-    <Loader2 className="h-8 w-8 animate-spin" />
-  </div>
-)
-
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4">
+      <Loader2 className="h-10 w-10 animate-spin text-gray-600" />
+      <p className="ml-4 text-lg text-gray-700">Cargando dashboard...</p>
+    </div>
+  )
 }

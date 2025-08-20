@@ -1,25 +1,15 @@
 "use client"
 
-import { cn } from "@/lib/utils"
-
 interface LogoFallbackProps {
-  width?: number
-  height?: number
   className?: string
 }
 
-export function LogoFallback({ width = 120, height = 120, className }: LogoFallbackProps) {
+export function LogoFallback({ className = "h-12 w-auto" }: LogoFallbackProps) {
   return (
     <div
-      className={cn(
-        "relative inline-flex items-center justify-center bg-gradient-to-br from-blue-600 to-green-600 rounded-full text-white font-bold",
-        className,
-      )}
-      style={{ width, height }}
+      className={`${className} flex items-center justify-center bg-gradient-to-r from-purple-600 to-green-600 rounded-lg p-2`}
     >
-      <div className="text-center">
-        <div className="text-lg font-bold">⚽</div>
-      </div>
+      <div className="text-white font-bold text-lg">⚽ Escuela de Fútbol</div>
     </div>
   )
 }

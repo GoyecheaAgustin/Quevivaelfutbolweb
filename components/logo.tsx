@@ -2,47 +2,28 @@
 
 import Image from "next/image"
 import { useState } from "react"
-import { cn } from "@/lib/utils"
+import { LogoFallback } from "./logo-fallback"
 
 interface LogoProps {
-  width?: number
-  height?: number
   className?: string
   priority?: boolean
 }
 
-// Componente de fallback
-function LogoFallback({ width = 120, height = 120, className }: LogoProps) {
-  return (
-    <div
-      className={cn(
-        "relative inline-flex items-center justify-center bg-gradient-to-br from-blue-600 to-green-600 rounded-full text-white font-bold shadow-lg",
-        className,
-      )}
-      style={{ width, height }}
-    >
-      <div className="text-center">
-        <div className="text-lg font-bold">⚽</div>
-      </div>
-    </div>
-  )
-}
-
-export function Logo({ width = 120, height = 120, className, priority = false }: LogoProps) {
+export function Logo({ className = "h-12 w-auto", priority = false }: LogoProps) {
   const [imageError, setImageError] = useState(false)
 
   if (imageError) {
-    return <LogoFallback width={width} height={height} className={className} />
+    return <LogoFallback className={className} />
   }
 
   return (
-    <div className={cn("relative inline-block", className)}>
+    <div className="relative">
       <Image
         src="/images/logo-oficial.png"
-        alt="Que Viva El Fútbol - Profe Beto"
-        width={width}
-        height={height}
-        className="object-contain drop-shadow-lg"
+        alt="Escuela de Fútbol"
+        width={200}
+        height={80}
+        className={`${className} object-contain transition-all duration-300 hover:scale-105`}
         priority={priority}
         onError={() => setImageError(true)}
       />
@@ -50,45 +31,21 @@ export function Logo({ width = 120, height = 120, className, priority = false }:
   )
 }
 
-export function LogoHero({ width = 220, height = 220, className, priority = false }: LogoProps) {
+export function LogoLogin({ className = "h-16 w-auto", priority = false }: LogoProps) {
   const [imageError, setImageError] = useState(false)
 
   if (imageError) {
-    return <LogoFallback width={width} height={height} className={cn("animate-float", className)} />
+    return <LogoFallback className={className} />
   }
 
   return (
-    <div className={cn("relative inline-block logo-container", className)}>
-      <div className="relative animate-float">
-        <Image
-          src="/images/logo-oficial.png"
-          alt="Que Viva El Fútbol - Profe Beto"
-          width={width}
-          height={height}
-          className="object-contain"
-          priority={priority}
-          onError={() => setImageError(true)}
-        />
-      </div>
-    </div>
-  )
-}
-
-export function LogoCompact({ width = 50, height = 50, className, priority = false }: LogoProps) {
-  const [imageError, setImageError] = useState(false)
-
-  if (imageError) {
-    return <LogoFallback width={width} height={height} className={className} />
-  }
-
-  return (
-    <div className={cn("relative inline-block logo-dashboard", className)}>
+    <div className="relative animate-pulse">
       <Image
         src="/images/logo-oficial.png"
-        alt="Que Viva El Fútbol - Profe Beto"
-        width={width}
-        height={height}
-        className="object-contain"
+        alt="Escuela de Fútbol"
+        width={250}
+        height={100}
+        className={`${className} object-contain transition-all duration-500 hover:scale-110 drop-shadow-lg`}
         priority={priority}
         onError={() => setImageError(true)}
       />
@@ -96,49 +53,21 @@ export function LogoCompact({ width = 50, height = 50, className, priority = fal
   )
 }
 
-export function LogoRegister({ width = 140, height = 140, className, priority = false }: LogoProps) {
+export function LogoRegister({ className = "h-20 w-auto", priority = false }: LogoProps) {
   const [imageError, setImageError] = useState(false)
 
   if (imageError) {
-    return <LogoFallback width={width} height={height} className={cn("animate-pulse-slow", className)} />
+    return <LogoFallback className={className} />
   }
 
   return (
-    <div className={cn("relative inline-block", className)}>
+    <div className="relative">
       <Image
         src="/images/logo-oficial.png"
-        alt="Que Viva El Fútbol - Profe Beto"
-        width={width}
-        height={height}
-        className="object-contain animate-pulse-slow"
-        priority={priority}
-        onError={() => setImageError(true)}
-      />
-    </div>
-  )
-}
-
-export function LogoFooter({ width = 80, height = 80, className, priority = false }: LogoProps) {
-  const [imageError, setImageError] = useState(false)
-
-  if (imageError) {
-    return (
-      <LogoFallback
-        width={width}
-        height={height}
-        className={cn("opacity-90 hover:opacity-100 transition-opacity", className)}
-      />
-    )
-  }
-
-  return (
-    <div className={cn("relative inline-block opacity-90 hover:opacity-100 transition-opacity", className)}>
-      <Image
-        src="/images/logo-oficial.png"
-        alt="Que Viva El Fútbol - Profe Beto"
-        width={width}
-        height={height}
-        className="object-contain"
+        alt="Escuela de Fútbol"
+        width={300}
+        height={120}
+        className={`${className} object-contain transition-all duration-700 hover:scale-105 filter drop-shadow-2xl animate-fade-in`}
         priority={priority}
         onError={() => setImageError(true)}
       />
